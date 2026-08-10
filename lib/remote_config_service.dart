@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class RemoteConfigService {
   static const String _keyTargetUrl = 'remote_target_url';
   static const String _keyFirstLaunch = 'is_first_launch_v1';
-  static const String _defaultUrl = 'https://stables365.com/cricket-betting/1793/1705297';
+  static const String _defaultUrl = 'https://stables365.com/';
 
   /// Fetch initial target URL from local persistence or Firebase Remote Config default
   static Future<String> getTargetUrl() async {

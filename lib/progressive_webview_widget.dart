@@ -40,7 +40,6 @@ class ProgressiveWebViewWidget extends StatefulWidget {
 
 class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
   NativeWebViewController? _controller;
-  int _progress = 0;
   bool _hasError = false;
   String _errorMessage = '';
   String _failingUrl = '';
@@ -204,12 +203,11 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
 
     controller.onProgressChanged = (progress) {
       if (mounted) {
-        setState(() {
-          _progress = progress;
-          if (progress == 100 && _hasError) {
+        if (progress == 100 && _hasError) {
+          setState(() {
             _hasError = false;
-          }
-        });
+          });
+        }
         widget.onProgress?.call(progress);
       }
     };
@@ -285,7 +283,6 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
   void _retryLoad() {
     setState(() {
       _hasError = false;
-      _progress = 10;
     });
     if (_failingUrl.isNotEmpty) {
       _controller?.loadUrl(_failingUrl);

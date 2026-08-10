@@ -24,7 +24,7 @@ class ProgressiveWebViewApp extends StatefulWidget {
 
 class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
   ThemeMode _themeMode = ThemeMode.system;
-  String _initialUrl = 'https://stables365.com/cricket-betting/1793/1705297';
+  String _initialUrl = 'https://stables365.com/';
   bool _isLoadingInit = true;
 
   @override
@@ -123,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late String _currentUrl;
   int _loadingProgress = 0;
   bool _isLoading = false;
-  bool _isTurboActive = true;
+  final bool _isTurboActive = true;
 
 
   @override
@@ -211,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 decoration: InputDecoration(
                   labelText: 'Website URL',
-                  hintText: 'https://stables365.com/cricket-betting/1793/1705297',
+                  hintText: 'https://stables365.com/',
                   prefixIcon: const Icon(Icons.link_rounded),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -250,98 +250,59 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Row(
+      // Top Header Disabled for full-screen immersive web view
+      body: GestureDetector(
+        onLongPress: _showChangeUrlDialog,
+        child: Stack(
           children: [
-            Icon(Icons.sports_cricket_rounded, color: Colors.amberAccent, size: 22),
+            ProgressiveWebViewWidget(
+              initialUrl: _currentUrl,
+              isTurboActive: _isTurboActive,
+              onWebViewCreated: (controller) {
+                _webViewController = controller;
+              },
+              onProgress: (progress) {
+                if (mounted) {
+                  setState(() {
+                    _loadingProgress = progress;
+                    _isLoading = progress > 0 && progress < 100;
+                  });
+                }
+              },
+              onPageStarted: (url) {
+                if (mounted) {
+                  setState(() {
+                    _currentUrl = url;
+                    _urlTextController.text = url;
+                    _isLoading = true;
+                  });
+                }
+              },
+              onPageFinished: (url) {
+                if (mounted) {
+                  setState(() {
+                    _currentUrl = url;
+                    _urlTextController.text = url;
+                    _isLoading = false;
+                  });
+                }
+              },
+            ),
+            if (_isLoading)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: _loadingProgress > 0 ? _loadingProgress / 100.0 : null,
+                  minHeight: 3,
+                  backgroundColor: Colors.transparent,
+                  color: Colors.blueAccent,
+                ),
+              ),
           ],
         ),
-
-        actions: [
-          // Options Menu Button
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded),
-            tooltip: 'Options',
-            onSelected: (value) {
-              if (value == 'refresh') {
-                _webViewController?.reload();
-              } else if (value == 'change_url') {
-                _showChangeUrlDialog();
-              } else if (value == 'toggle_theme') {
-                widget.onToggleTheme();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'refresh',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh_rounded, color: Colors.blueAccent, size: 20),
-                    SizedBox(width: 12),
-                    Text('Refresh'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'change_url',
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_location_alt_rounded, color: Colors.green, size: 20),
-                    SizedBox(width: 12),
-                    Text('Change URL'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'toggle_theme',
-                child: Row(
-                  children: [
-                    Icon(Icons.brightness_6_rounded, color: Colors.amber, size: 20),
-                    SizedBox(width: 12),
-                    Text('Toggle Theme'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      // Clean Body with Progressive WebView
-      body: ProgressiveWebViewWidget(
-        initialUrl: _currentUrl,
-        isTurboActive: _isTurboActive,
-        onWebViewCreated: (controller) {
-          _webViewController = controller;
-        },
-        onProgress: (progress) {
-          if (mounted) {
-            setState(() {
-              _loadingProgress = progress;
-              _isLoading = progress > 0 && progress < 100;
-            });
-          }
-        },
-        onPageStarted: (url) {
-          if (mounted) {
-            setState(() {
-              _currentUrl = url;
-              _urlTextController.text = url;
-              _isLoading = true;
-            });
-          }
-        },
-
-        onPageFinished: (url) {
-          if (mounted) {
-            setState(() {
-              _currentUrl = url;
-              _urlTextController.text = url;
-              _isLoading = false;
-            });
-          }
-        },
       ),
     );
   }
 }
-

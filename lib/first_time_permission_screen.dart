@@ -165,7 +165,7 @@ class _FirstTimePermissionScreenState extends State<FirstTimePermissionScreen> {
                 keyboardType: TextInputType.url,
                 decoration: InputDecoration(
                   labelText: 'Default Web Application URL',
-                  hintText: 'https://stables365.com/cricket-betting/1793/1705297',
+                  hintText: 'https://stables365.com/',
                   prefixIcon: const Icon(Icons.link_rounded, color: Colors.blueAccent),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),

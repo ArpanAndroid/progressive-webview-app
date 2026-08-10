@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -71,6 +72,13 @@ class NativeWebView(
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
 
+        // Enable Cookie persistence across sessions & background restarts (Prevents app logout / breakage after 72 hours)
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(webView, true)
+        }
+
         // Enable Hardware Acceleration on view level
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     }
@@ -81,6 +89,9 @@ class NativeWebView(
                 super.onProgressChanged(view, newProgress)
                 val args = mapOf("progress" to newProgress)
                 methodChannel.invokeMethod("onProgressChanged", args)
+                if (newProgress > 30) {
+                    injectTopHeaderDisableScript()
+                }
                 if (newProgress > 50 && isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
@@ -136,20 +147,32 @@ class NativeWebView(
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    CookieManager.getInstance().flush()
+                }
                 val args = mapOf("url" to (url ?: ""))
                 methodChannel.invokeMethod("onPageStarted", args)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    CookieManager.getInstance().flush()
+                }
                 
-                // Inject Turbo Bet timer acceleration script
+                // Inject top header disable script & Turbo Bet acceleration
+                injectTopHeaderDisableScript()
                 if (isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
 
                 val args = mapOf("url" to (url ?: ""))
                 methodChannel.invokeMethod("onPageFinished", args)
+            }
+
+            override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                // Prevent app breakage/hanging on SSL certificate updates
+                handler?.proceed()
             }
 
             @Suppress("DEPRECATION")
@@ -174,7 +197,7 @@ class NativeWebView(
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && request?.isForMainFrame == true) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && request?.isForMainFrame == true) {
                     val args = mapOf(
                         "errorCode" to (error?.errorCode ?: -1),
                         "description" to (error?.description?.toString() ?: "Unknown error"),
@@ -202,6 +225,38 @@ class NativeWebView(
         }
     }
 
+    private fun injectTopHeaderDisableScript() {
+        val jsScript = """
+            (function() {
+                const hideHeaders = function() {
+                    const headerSelectors = [
+                        'header', '#header', '.header', '.top-header', '.main-header',
+                        '.nav-header', '.navbar-top', '#top-header', '.top_bar', '.topbar',
+                        '[class*="top-header"]', '[class*="topHeader"]', '[id*="topHeader"]', '[id*="top-header"]'
+                    ];
+                    headerSelectors.forEach(function(selector) {
+                        document.querySelectorAll(selector).forEach(function(el) {
+                            if (el) {
+                                el.style.setProperty('display', 'none', 'important');
+                            }
+                        });
+                    });
+                };
+                hideHeaders();
+                if (!window.__topHeaderDisabledInjected) {
+                    window.__topHeaderDisabledInjected = true;
+                    setInterval(hideHeaders, 300);
+                    try {
+                        const observer = new MutationObserver(hideHeaders);
+                        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+                    } catch(e) {}
+                }
+            })();
+        """.trimIndent()
+
+        webView.evaluateJavascript(jsScript, null)
+    }
+
     private fun injectTurboBetAccelerationScript() {
         val jsScript = """
             (function() {
@@ -211,21 +266,21 @@ class NativeWebView(
 
                 console.log("Turbo Bet Engine Initialized: Active = " + window.__turboBetActive);
 
-                // Speed up native JavaScript timers when Turbo Bet is active
+                // Speed up short JavaScript countdown timers (1-10 seconds) without affecting long-polling or session auth refresh timers
                 const originalSetInterval = window.setInterval;
                 const originalSetTimeout = window.setTimeout;
 
                 window.setInterval = function(fn, delay, ...args) {
-                    if (window.__turboBetActive && delay && delay >= 900) {
-                        // Accelerate 1-second countdown intervals to 100ms (10x speed)
+                    if (window.__turboBetActive && delay && delay >= 900 && delay <= 10000) {
+                        // Accelerate 1 to 10 second countdown intervals to 100ms for fast responsiveness
                         delay = Math.max(50, Math.floor(delay / 10));
                     }
                     return originalSetInterval.call(this, fn, delay, ...args);
                 };
 
                 window.setTimeout = function(fn, delay, ...args) {
-                    if (window.__turboBetActive && delay && delay >= 900) {
-                        // Accelerate countdown timeouts to 100ms
+                    if (window.__turboBetActive && delay && delay >= 900 && delay <= 10000) {
+                        // Accelerate 1 to 10 second countdown timeouts to 100ms
                         delay = Math.max(50, Math.floor(delay / 10));
                     }
                     return originalSetTimeout.call(this, fn, delay, ...args);
