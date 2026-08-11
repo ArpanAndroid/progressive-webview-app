@@ -177,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 1),
         ),
       );
     }
@@ -266,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await _webViewController?.goBack();
         } else {
           final now = DateTime.now();
-          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 1)) {
             _lastBackPressTime = now;
             if (mounted) {
               messenger.hideCurrentSnackBar();
@@ -284,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                  duration: const Duration(seconds: 2),
+                  duration: const Duration(seconds: 1),
                   behavior: SnackBarBehavior.floating,
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

@@ -270,7 +270,7 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
                 Expanded(child: Text(msg)),
               ],
             ),
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 1),
             behavior: SnackBarBehavior.floating,
           ),
         );

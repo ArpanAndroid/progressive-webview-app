@@ -39,8 +39,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animationController.forward();
 
-    // Auto navigate after splash duration
-    Future.delayed(const Duration(milliseconds: 2600), () {
+    // Auto navigate after splash duration (1 second)
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (mounted) {
         widget.onSplashComplete();
       }
