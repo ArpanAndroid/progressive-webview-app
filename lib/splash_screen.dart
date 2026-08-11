@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'remote_config_service.dart';
 
 class SplashScreen extends StatefulWidget {
   final VoidCallback onSplashComplete;
@@ -20,6 +21,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    RemoteConfigService.initOrValidateSession();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -201,10 +203,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.bolt_rounded, size: 14, color: Colors.amberAccent),
+                            Icon(Icons.shield_outlined, size: 14, color: Colors.greenAccent),
                             SizedBox(width: 6),
                             Text(
-                              'Progressive Web Engine Active',
+                              '72-Hour Session Persistence Active',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,

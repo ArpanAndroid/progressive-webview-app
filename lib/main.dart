@@ -183,71 +183,208 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  static const List<Map<String, String>> _presetUrls = [
+    {
+      'title': 'Kabook Sports',
+      'url': 'https://kabook567.com/sports',
+    },
+    {
+      'title': 'Reddy Books',
+      'url': 'https://reddybooks.online',
+    },
+    {
+      'title': 'Playwin321 Home',
+      'url': 'https://playwin321.com/home',
+    },
+    {
+      'title': 'Tiger365 Login',
+      'url': 'https://tiger365.pro/login',
+    },
+  ];
+
   void _showChangeUrlDialog() {
     final controller = TextEditingController(text: _currentUrl);
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.edit_location_alt_rounded, color: Colors.blueAccent),
-              SizedBox(width: 10),
-              Text('Change Web Address'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter target web URL to save and load data into the native view:',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final currentInput = controller.text.trim();
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.edit_location_alt_rounded, color: Colors.blueAccent),
+                  SizedBox(width: 10),
+                  Text('Change Web Address', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
               ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (val) {
-                  Navigator.pop(context);
-                  _loadAndSaveUrl(val);
-                },
-                decoration: InputDecoration(
-                  labelText: 'Website URL',
-                  hintText: 'https://stables365.com/',
-                  prefixIcon: const Icon(Icons.link_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shield_outlined, size: 14, color: Colors.green),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '72-Hour Session Persistence Active',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Quick Select Preset Option:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: _presetUrls.map((preset) {
+                        final presetUrl = preset['url']!;
+                        final isSelected = currentInput == presetUrl;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6.0),
+                          child: InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                controller.text = presetUrl;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.blueAccent.withOpacity(0.15)
+                                    : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08)),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isSelected ? Colors.blueAccent : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                                  width: isSelected ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                    color: isSelected ? Colors.blueAccent : Colors.grey,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          preset['title']!,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: isSelected ? Colors.blueAccent : (isDark ? Colors.white : Colors.black87),
+                                          ),
+                                        ),
+                                        Text(
+                                          presetUrl,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Or enter target custom web URL:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: controller,
+                      autofocus: false,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (val) {
+                        setDialogState(() {});
+                      },
+                      onSubmitted: (val) {
+                        Navigator.pop(context);
+                        _loadAndSaveUrl(val);
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Custom URL',
+                        hintText: 'https://example.com/',
+                        prefixIcon: const Icon(Icons.link_rounded),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                final newUrl = controller.text.trim();
-                Navigator.pop(context);
-                if (newUrl.isNotEmpty) {
-                  _loadAndSaveUrl(newUrl);
-                }
-              },
-              icon: const Icon(Icons.save_rounded, size: 18),
-              label: const Text('Save & Refresh'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final newUrl = controller.text.trim();
+                    Navigator.pop(context);
+                    if (newUrl.isNotEmpty) {
+                      _loadAndSaveUrl(newUrl);
+                    }
+                  },
+                  icon: const Icon(Icons.save_rounded, size: 18),
+                  label: const Text('Save & Refresh'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );

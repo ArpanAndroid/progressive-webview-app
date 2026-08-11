@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class RemoteConfigService {
   static const String _keyTargetUrl = 'remote_target_url';
   static const String _keyFirstLaunch = 'is_first_launch_v1';
+  static const String _keySessionTimestamp = 'session_start_timestamp_v1';
   static const String _defaultUrl = 'https://stables365.com/';
+  static const int sessionDurationHours = 72;
 
   /// Fetch initial target URL from local persistence or Firebase Remote Config default
   static Future<String> getTargetUrl() async {
@@ -25,6 +27,57 @@ class RemoteConfigService {
     } catch (e) {
       if (kDebugMode) print('Error saving target URL: $e');
       return false;
+    }
+  }
+
+  /// Initialize or validate 72-hour session persistence
+  static Future<bool> initOrValidateSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastTimestamp = prefs.getInt(_keySessionTimestamp);
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+      if (lastTimestamp == null) {
+        await prefs.setInt(_keySessionTimestamp, nowMs);
+        return true;
+      }
+
+      final elapsedHours = (nowMs - lastTimestamp) / (1000 * 60 * 60);
+      if (elapsedHours >= sessionDurationHours) {
+        // Refresh session timestamp for new 72-hour cycle
+        await prefs.setInt(_keySessionTimestamp, nowMs);
+        if (kDebugMode) print('72-hour session renewed.');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('Error validating 72h session: $e');
+      return true;
+    }
+  }
+
+  /// Get remaining hours in current 72-hour session
+  static Future<int> getRemainingSessionHours() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastTimestamp = prefs.getInt(_keySessionTimestamp);
+      if (lastTimestamp == null) return sessionDurationHours;
+
+      final elapsedHours = (DateTime.now().millisecondsSinceEpoch - lastTimestamp) / (1000 * 60 * 60);
+      final remaining = sessionDurationHours - elapsedHours.floor();
+      return remaining > 0 ? remaining : 0;
+    } catch (e) {
+      return sessionDurationHours;
+    }
+  }
+
+  /// Reset or refresh 72-hour session explicitly
+  static Future<void> refreshSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_keySessionTimestamp, DateTime.now().millisecondsSinceEpoch);
+    } catch (e) {
+      if (kDebugMode) print('Error refreshing session: $e');
     }
   }
 
@@ -60,9 +113,6 @@ class RemoteConfigService {
 
   /// Simulates or connects Firebase Remote Config fetch anytime during runtime
   static Future<String?> fetchFirebaseRemoteConfig({String? remoteKey}) async {
-    // Firebase Remote Config Hook
-    // When Firebase SDK is linked, call FirebaseRemoteConfig.instance.fetchAndActivate()
-    // For standalone production readiness, returns configured target or null
     await Future.delayed(const Duration(milliseconds: 600));
     final currentUrl = await getTargetUrl();
     if (kDebugMode) print('Firebase Remote Config checked. Active remote URL: $currentUrl');
