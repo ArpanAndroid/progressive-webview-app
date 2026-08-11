@@ -342,38 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Or enter target custom web URL:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: controller,
-                      autofocus: false,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (val) {
-                        setDialogState(() {});
-                      },
-                      onSubmitted: (val) {
-                        Navigator.pop(context);
-                        _loadAndSaveUrl(val);
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Website URL',
-                        hintText: 'https://stables365.com/',
-                        prefixIcon: const Icon(Icons.link_rounded),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
