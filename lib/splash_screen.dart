@@ -201,10 +201,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.shield_outlined, size: 14, color: Colors.greenAccent),
+                            Icon(Icons.bolt_rounded, size: 14, color: Colors.amberAccent),
                             SizedBox(width: 6),
                             Text(
-                              '72-Hour Session Persistence Active',
+                              'Progressive Web Engine Active',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,

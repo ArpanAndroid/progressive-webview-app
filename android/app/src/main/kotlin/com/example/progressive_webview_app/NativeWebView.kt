@@ -72,7 +72,7 @@ class NativeWebView(
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
 
-        // Enable Cookie persistence across sessions & background restarts (Prevents app logout / breakage after 72 hours)
+        // Enable Cookie persistence across sessions & background restarts
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
