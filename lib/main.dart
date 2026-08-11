@@ -424,68 +424,96 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.shield_outlined, color: Colors.greenAccent),
-              SizedBox(width: 10),
-              Text('Security & License'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Device License Key:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 4),
-              SelectableText(
-                status.deviceKey,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
-              ),
-              const SizedBox(height: 12),
-              const Text('Approval Status:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 4),
-              Row(
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isEnabled = FirebaseSecurityService.enableSecurityGate;
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
                 children: [
-                  Icon(
-                    status.isApproved ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
-                    color: status.isApproved ? Colors.green : Colors.amber,
-                    size: 18,
+                  Icon(Icons.shield_outlined, color: Colors.greenAccent),
+                  SizedBox(width: 10),
+                  Text('Security & License'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Device License Key:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    status.deviceKey,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      status.statusMessage,
-                      style: TextStyle(
-                        color: status.isApproved ? Colors.green : Colors.amber,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                  const SizedBox(height: 12),
+                  const Text('Gatekeeper Status:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        isEnabled ? Icons.security_rounded : Icons.gpp_maybe_rounded,
+                        color: isEnabled ? Colors.amber : Colors.green,
+                        size: 18,
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          isEnabled ? 'Firebase Approval Gate ACTIVE' : 'Firebase Gate Currently DISABLED (Direct Access)',
+                          style: TextStyle(
+                            color: isEnabled ? Colors.amber : Colors.green,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    value: isEnabled,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enforce Firebase Security Gate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Require Firebase DB admin approval before opening APK app.', style: TextStyle(fontSize: 11)),
+                    activeColor: Colors.amber,
+                    onChanged: (val) {
+                      setDialogState(() {
+                        FirebaseSecurityService.enableSecurityGate = val;
+                      });
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(val ? 'Firebase Security Enforcement Enabled!' : 'Firebase Security Enforcement Disabled!'),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: status.deviceKey));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Copied key: ${status.deviceKey}'),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              },
-              child: const Text('Copy Key'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: status.deviceKey));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Copied key: ${status.deviceKey}'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: const Text('Copy Key'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

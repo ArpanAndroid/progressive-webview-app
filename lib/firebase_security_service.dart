@@ -31,6 +31,9 @@ class FirebaseSecurityService {
   static const String defaultFirebaseDbUrl = 'https://stables365-security-default-rtdb.firebaseio.com/';
   static const String defaultMasterKey = 'STABLES-ADMIN-777';
 
+  /// Toggle flag: Currently set to false to disable Firebase Security Gating
+  static bool enableSecurityGate = false;
+
   /// Fetch or auto-generate unique persistent Device Key
   static Future<String> getDeviceKey() async {
     try {
@@ -105,10 +108,10 @@ class FirebaseSecurityService {
     final dbUrl = await getFirebaseDbUrl();
     final localOverride = await isLocallyApproved();
 
-    if (localOverride) {
+    if (!enableSecurityGate || localOverride) {
       return ApprovalStatus(
         isApproved: true,
-        statusMessage: 'Unlocked via Admin Master Key',
+        statusMessage: enableSecurityGate ? 'Unlocked via Admin Master Key' : 'Firebase Security Currently Disabled',
         deviceKey: deviceKey,
         firebaseDbUrl: dbUrl,
         isLocalBypass: true,
