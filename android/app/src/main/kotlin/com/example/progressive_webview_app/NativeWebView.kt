@@ -45,11 +45,15 @@ class NativeWebView(
     private fun configureWebViewSettings() {
         val settings = webView.settings
         
-        // Dynamic JavaScript & DOM Storage (Crucial for Progressive Web Apps)
+        // Dynamic JavaScript, Geolocation & DOM Storage (Crucial for Progressive Web Apps)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
         settings.javaScriptCanOpenWindowsAutomatically = true
+        settings.setGeolocationEnabled(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            settings.mediaPlaybackRequiresUserGesture = false
+        }
 
         // Enable popup window handling by mobile app
         settings.setSupportMultipleWindows(true)
@@ -108,6 +112,13 @@ class NativeWebView(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     request?.grant(request.resources)
                 }
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String?,
+                callback: GeolocationPermissions.Callback?
+            ) {
+                callback?.invoke(origin, true, false)
             }
 
             // Mobile app handles website popups and automatically closes them quickly if Turbo is active
