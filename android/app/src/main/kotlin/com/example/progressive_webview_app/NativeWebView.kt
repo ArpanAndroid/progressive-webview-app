@@ -212,10 +212,29 @@ class NativeWebView(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && request?.isForMainFrame == true) {
                     val args = mapOf(
                         "errorCode" to (error?.errorCode ?: -1),
-                        "description" to (error?.description?.toString() ?: "Unknown error"),
+                        "description" to (error?.description?.toString() ?: "Web page not found or network connection error"),
                         "failingUrl" to (request.url?.toString() ?: "")
                     )
                     methodChannel.invokeMethod("onErrorReceived", args)
+                }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && request?.isForMainFrame == true) {
+                    val statusCode = errorResponse?.statusCode ?: -1
+                    if (statusCode >= 400) {
+                        val args = mapOf(
+                            "errorCode" to statusCode,
+                            "description" to "Server Error / Web Page Not Found (HTTP $statusCode)",
+                            "failingUrl" to (request.url?.toString() ?: "")
+                        )
+                        methodChannel.invokeMethod("onErrorReceived", args)
+                    }
                 }
             }
 

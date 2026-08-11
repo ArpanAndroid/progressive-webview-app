@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'firebase_security_service.dart';
 import 'native_webview_controller.dart';
 import 'progressive_webview_widget.dart';
 import 'remote_config_service.dart';
+import 'security_lock_screen.dart';
 import 'splash_screen.dart';
 
 void main() {
@@ -28,6 +30,7 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
   String _initialUrl = 'https://stables365.com/';
   bool _isLoadingInit = true;
   bool _showSplash = true;
+  ApprovalStatus? _approvalStatus;
 
   @override
   void initState() {
@@ -37,9 +40,11 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
 
   Future<void> _loadInitialState() async {
     final url = await RemoteConfigService.getTargetUrl();
+    final status = await FirebaseSecurityService.checkDeviceApproval();
     if (mounted) {
       setState(() {
         _initialUrl = url;
+        _approvalStatus = status;
         _isLoadingInit = false;
       });
     }
@@ -75,6 +80,24 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
             if (mounted) {
               setState(() {
                 _showSplash = false;
+              });
+            }
+          },
+        ),
+      );
+    }
+
+    if (_approvalStatus != null && !_approvalStatus!.isApproved) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData.dark(),
+        home: SecurityLockScreen(
+          initialStatus: _approvalStatus!,
+          onApproved: () async {
+            final newStatus = await FirebaseSecurityService.checkDeviceApproval();
+            if (mounted) {
+              setState(() {
+                _approvalStatus = newStatus;
               });
             }
           },
@@ -184,6 +207,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   static const List<Map<String, String>> _presetUrls = [
+    {
+      'title': 'Stables 365',
+      'url': 'https://stables365.com/',
+    },
     {
       'title': 'Kabook Sports',
       'url': 'https://kabook567.com/sports',
@@ -390,6 +417,80 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _showSecurityInfoDialog() async {
+    final status = await FirebaseSecurityService.checkDeviceApproval();
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.greenAccent),
+              SizedBox(width: 10),
+              Text('Security & License'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Device License Key:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 4),
+              SelectableText(
+                status.deviceKey,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
+              ),
+              const SizedBox(height: 12),
+              const Text('Approval Status:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(
+                    status.isApproved ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+                    color: status.isApproved ? Colors.green : Colors.amber,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      status.statusMessage,
+                      style: TextStyle(
+                        color: status.isApproved ? Colors.green : Colors.amber,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: status.deviceKey));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Copied key: ${status.deviceKey}'),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              },
+              child: const Text('Copy Key'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final messenger = ScaffoldMessenger.of(context);
@@ -434,7 +535,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       child: Scaffold(
-        // Clean immersive view without normal top bar
         body: GestureDetector(
           onLongPress: _showChangeUrlDialog,
           child: Stack(
@@ -442,6 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ProgressiveWebViewWidget(
                 initialUrl: _currentUrl,
                 isTurboActive: _isTurboActive,
+                onRequestChangeUrl: _showChangeUrlDialog,
                 onWebViewCreated: (controller) {
                   _webViewController = controller;
                 },
@@ -484,7 +585,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.blueAccent,
                   ),
                 ),
-              // Discrete floating menu icon button at top-right corner with ONLY ONE OPTION: Change URL
               Positioned(
                 top: 40,
                 right: 12,
@@ -517,6 +617,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       onSelected: (value) {
                         if (value == 'change_url') {
                           _showChangeUrlDialog();
+                        } else if (value == 'security_info') {
+                          _showSecurityInfoDialog();
                         }
                       },
                       itemBuilder: (context) => [
@@ -528,6 +630,19 @@ class _HomeScreenState extends State<HomeScreen> {
                               SizedBox(width: 10),
                               Text(
                                 'Change URL',
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'security_info',
+                          child: Row(
+                            children: [
+                              Icon(Icons.security_rounded, color: Colors.greenAccent, size: 20),
+                              SizedBox(width: 10),
+                              Text(
+                                'Security & License',
                                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                               ),
                             ],

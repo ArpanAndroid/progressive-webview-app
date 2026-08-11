@@ -18,6 +18,7 @@ class ProgressiveWebViewWidget extends StatefulWidget {
   final ValueChanged<String>? onPageFinished;
   final ValueChanged<String>? onPopupOpened;
   final ValueChanged<String>? onPopupAutoClosed;
+  final VoidCallback? onRequestChangeUrl;
 
   const ProgressiveWebViewWidget({
     super.key,
@@ -31,6 +32,7 @@ class ProgressiveWebViewWidget extends StatefulWidget {
     this.onPageFinished,
     this.onPopupOpened,
     this.onPopupAutoClosed,
+    this.onRequestChangeUrl,
   });
 
   @override
@@ -111,32 +113,34 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
             },
           ),
 
-        // Responsive Offline / Error State Fallback UI
+        // Responsive Offline / Slow Page Error State UI
         if (_hasError)
           Positioned.fill(
             child: Container(
               color: Theme.of(context).scaffoldBackgroundColor,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withOpacity(0.12),
                       shape: BoxShape.circle,
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
                     ),
                     child: const Icon(
-                      Icons.wifi_off_rounded,
-                      size: 64,
+                      Icons.cloud_off_rounded,
+                      size: 60,
                       color: Colors.redAccent,
                     ),
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Unable to Connect',
+                    'Web Page Not Found or Website Slow',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.5,
                     ),
@@ -145,41 +149,69 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
                   Text(
                     _errorMessage.isNotEmpty
                         ? _errorMessage
-                        : 'Please check your network connection and try again.',
+                        : 'The webpage is taking too long to load or server returned an error.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: Colors.grey.shade600,
                       height: 1.4,
                     ),
                   ),
                   if (_failingUrl.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _failingUrl,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
-                        fontStyle: FontStyle.italic,
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _failingUrl,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                          fontFamily: 'monospace',
+                        ),
                       ),
                     ),
                   ],
                   const SizedBox(height: 28),
-                  ElevatedButton.icon(
-                    onPressed: _retryLoad,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Try Again'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+
+                  // Action buttons: Retry + Change URL
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _retryLoad,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Retry Loading'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
                       ),
-                      elevation: 2,
-                    ),
+                      if (widget.onRequestChangeUrl != null) ...[
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          onPressed: widget.onRequestChangeUrl,
+                          icon: const Icon(Icons.edit_location_alt_rounded, size: 18, color: Colors.blueAccent),
+                          label: const Text('Switch URL'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
