@@ -28,7 +28,7 @@ class FirebaseSecurityService {
   static const String _keyFirebaseDbUrl = 'firebase_db_url_v1';
   static const String _keyLocalApprovalOverride = 'local_approval_override_v1';
 
-  static const String defaultFirebaseDbUrl = 'https://stables365-security-default-rtdb.firebaseio.com/';
+  static const String defaultFirebaseDbUrl = 'https://stables365';
   static const String defaultMasterKey = 'STABLES-ADMIN-777';
 
   /// Toggle flag: Currently set to false to disable Firebase Security Gating

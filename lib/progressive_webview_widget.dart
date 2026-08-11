@@ -224,6 +224,14 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
   @override
   void didUpdateWidget(covariant ProgressiveWebViewWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialUrl != widget.initialUrl) {
+      if (mounted) {
+        setState(() {
+          _hasError = false;
+        });
+      }
+      _controller?.loadUrl(widget.initialUrl);
+    }
     if (oldWidget.isTurboActive != widget.isTurboActive) {
       _controller?.setTurboBetEnabled(widget.isTurboActive);
     }

@@ -181,9 +181,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // Save URL persistently across app storage & remote config
     await RemoteConfigService.saveTargetUrl(formattedUrl);
 
-    // Load data into native WebView and refresh
+    // Load target URL directly into native WebView
     await _webViewController?.loadUrl(formattedUrl);
-    await _webViewController?.reload();
 
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -263,18 +262,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.shield_outlined, size: 14, color: Colors.green),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '72-Hour Session Persistence Active',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ),
+
+
                         ],
                       ),
                     ),
@@ -376,8 +365,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         _loadAndSaveUrl(val);
                       },
                       decoration: InputDecoration(
-                        labelText: 'Custom URL',
-                        hintText: 'https://example.com/',
+                        labelText: 'Website URL',
+                        hintText: 'https://stables365.com/',
                         prefixIcon: const Icon(Icons.link_rounded),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         border: OutlineInputBorder(
@@ -663,19 +652,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
-                        const PopupMenuItem<String>(
-                          value: 'security_info',
-                          child: Row(
-                            children: [
-                              Icon(Icons.security_rounded, color: Colors.greenAccent, size: 20),
-                              SizedBox(width: 10),
-                              Text(
-                                'Security & License',
-                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                              ),
-                            ],
-                          ),
-                        ),
+
                       ],
                     ),
                   ),
