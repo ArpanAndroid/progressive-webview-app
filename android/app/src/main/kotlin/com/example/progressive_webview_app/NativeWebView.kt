@@ -77,6 +77,7 @@ class NativeWebView(
         cookieManager.setAcceptCookie(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
+            cookieManager.flush()
         }
 
         // Enable Hardware Acceleration on view level
@@ -446,6 +447,9 @@ class NativeWebView(
 
     override fun dispose() {
         methodChannel.setMethodCallHandler(null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().flush()
+        }
         webView.stopLoading()
         webView.destroy()
     }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'native_webview_controller.dart';
 import 'progressive_webview_widget.dart';
 import 'remote_config_service.dart';
+import 'splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,7 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
   ThemeMode _themeMode = ThemeMode.system;
   String _initialUrl = 'https://stables365.com/';
   bool _isLoadingInit = true;
+  bool _showSplash = true;
 
   @override
   void initState() {
@@ -49,13 +51,13 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
     if (_isLoadingInit) {
       return const MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
+          backgroundColor: Color(0xFF0F172A),
           body: Center(
             child: CircularProgressIndicator(
               color: Colors.blueAccent,
@@ -65,8 +67,23 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
       );
     }
 
+    if (_showSplash) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: SplashScreen(
+          onSplashComplete: () {
+            if (mounted) {
+              setState(() {
+                _showSplash = false;
+              });
+            }
+          },
+        ),
+      );
+    }
+
     return MaterialApp(
-      title: '',
+      title: 'Cricket Live PWA',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
       theme: ThemeData(
@@ -101,7 +118,6 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
   }
 }
 
-
 class HomeScreen extends StatefulWidget {
   final String initialUrl;
   final VoidCallback onToggleTheme;
@@ -124,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _loadingProgress = 0;
   bool _isLoading = false;
   final bool _isTurboActive = true;
-
+  DateTime? _lastBackPressTime;
 
   @override
   void initState() {
@@ -249,58 +265,146 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // Top Header Disabled for full-screen immersive web view
-      body: GestureDetector(
-        onLongPress: _showChangeUrlDialog,
-        child: Stack(
-          children: [
-            ProgressiveWebViewWidget(
-              initialUrl: _currentUrl,
-              isTurboActive: _isTurboActive,
-              onWebViewCreated: (controller) {
-                _webViewController = controller;
-              },
-              onProgress: (progress) {
-                if (mounted) {
-                  setState(() {
-                    _loadingProgress = progress;
-                    _isLoading = progress > 0 && progress < 100;
-                  });
-                }
-              },
-              onPageStarted: (url) {
-                if (mounted) {
-                  setState(() {
-                    _currentUrl = url;
-                    _urlTextController.text = url;
-                    _isLoading = true;
-                  });
-                }
-              },
-              onPageFinished: (url) {
-                if (mounted) {
-                  setState(() {
-                    _currentUrl = url;
-                    _urlTextController.text = url;
-                    _isLoading = false;
-                  });
-                }
-              },
-            ),
-            if (_isLoading)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: LinearProgressIndicator(
-                  value: _loadingProgress > 0 ? _loadingProgress / 100.0 : null,
-                  minHeight: 3,
-                  backgroundColor: Colors.transparent,
-                  color: Colors.blueAccent,
+    final messenger = ScaffoldMessenger.of(context);
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final canGoBack = await _webViewController?.canGoBack() ?? false;
+        if (canGoBack) {
+          await _webViewController?.goBack();
+        } else {
+          final now = DateTime.now();
+          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+            _lastBackPressTime = now;
+            if (mounted) {
+              messenger.hideCurrentSnackBar();
+              messenger.showSnackBar(
+                SnackBar(
+                  content: const Row(
+                    children: [
+                      Icon(Icons.exit_to_app_rounded, color: Colors.amberAccent, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Do you want to close? Press back again to close app',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            }
+          } else {
+            SystemNavigator.pop();
+          }
+        }
+      },
+      child: Scaffold(
+        // Small Size Main Header Bar
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(44.0),
+          child: AppBar(
+            toolbarHeight: 44.0,
+            elevation: 1,
+            scrolledUnderElevation: 1,
+            titleSpacing: 12,
+            title: InkWell(
+              onTap: _showChangeUrlDialog,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.language_rounded, size: 16, color: Colors.blueAccent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _currentUrl,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-          ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                tooltip: 'Refresh Page',
+                onPressed: () => _webViewController?.reload(),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_location_alt_rounded, size: 20),
+                tooltip: 'Change Custom URL',
+                onPressed: _showChangeUrlDialog,
+              ),
+              IconButton(
+                icon: const Icon(Icons.brightness_6_rounded, size: 18),
+                tooltip: 'Toggle Theme',
+                onPressed: widget.onToggleTheme,
+              ),
+            ],
+          ),
+        ),
+        body: GestureDetector(
+          onLongPress: _showChangeUrlDialog,
+          child: Stack(
+            children: [
+              ProgressiveWebViewWidget(
+                initialUrl: _currentUrl,
+                isTurboActive: _isTurboActive,
+                onWebViewCreated: (controller) {
+                  _webViewController = controller;
+                },
+                onProgress: (progress) {
+                  if (mounted) {
+                    setState(() {
+                      _loadingProgress = progress;
+                      _isLoading = progress > 0 && progress < 100;
+                    });
+                  }
+                },
+                onPageStarted: (url) {
+                  if (mounted) {
+                    setState(() {
+                      _currentUrl = url;
+                      _urlTextController.text = url;
+                      _isLoading = true;
+                    });
+                  }
+                },
+                onPageFinished: (url) {
+                  if (mounted) {
+                    setState(() {
+                      _currentUrl = url;
+                      _urlTextController.text = url;
+                      _isLoading = false;
+                    });
+                  }
+                },
+              ),
+              if (_isLoading)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(
+                    value: _loadingProgress > 0 ? _loadingProgress / 100.0 : null,
+                    minHeight: 3,
+                    backgroundColor: Colors.transparent,
+                    color: Colors.blueAccent,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
