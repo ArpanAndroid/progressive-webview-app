@@ -91,24 +91,12 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
         colorSchemeSeed: Colors.blueAccent,
         brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFA8B4C0),
-        appBarTheme: const AppBarTheme(
-          elevation: 2,
-          scrolledUnderElevation: 2,
-          backgroundColor: Colors.white,
-          foregroundColor: Color(0xFF1E293B),
-        ),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.blueAccent,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0F172A),
-        appBarTheme: const AppBarTheme(
-          elevation: 2,
-          scrolledUnderElevation: 2,
-          backgroundColor: Color(0xFF1E293B),
-          foregroundColor: Colors.white,
-        ),
       ),
       home: HomeScreen(
         initialUrl: _initialUrl,
@@ -167,10 +155,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _urlTextController.text = formattedUrl;
     });
 
-    // Save URL persistently across full app storage & remote config
+    // Save URL persistently across app storage & remote config
     await RemoteConfigService.saveTargetUrl(formattedUrl);
 
-    // Load data into native WebView and trigger reload
+    // Load data into native WebView and refresh
     await _webViewController?.loadUrl(formattedUrl);
     await _webViewController?.reload();
 
@@ -183,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const Icon(Icons.check_circle_rounded, color: Colors.greenAccent),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('App URL updated & refreshed: $formattedUrl'),
+                child: Text('App URL saved & loaded: $formattedUrl'),
               ),
             ],
           ),
@@ -206,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(Icons.edit_location_alt_rounded, color: Colors.blueAccent),
               SizedBox(width: 10),
-              Text('Change App Web Address'),
+              Text('Change Web Address'),
             ],
           ),
           content: Column(
@@ -214,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Enter target website URL to save and load across the full app view:',
+                'Enter target web URL to save and load data into the native view:',
                 style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 14),
@@ -228,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _loadAndSaveUrl(val);
                 },
                 decoration: InputDecoration(
-                  labelText: 'Target Website URL',
+                  labelText: 'Website URL',
                   hintText: 'https://stables365.com/',
                   prefixIcon: const Icon(Icons.link_rounded),
                   border: OutlineInputBorder(
@@ -268,7 +256,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final messenger = ScaffoldMessenger.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return PopScope(
       canPop: false,
@@ -310,140 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       child: Scaffold(
-        // Top Action Bar
-        appBar: AppBar(
-          toolbarHeight: 50.0,
-          elevation: 2,
-          titleSpacing: 10,
-          title: Container(
-            height: 36,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-              ),
-            ),
-            child: InkWell(
-              onTap: _showChangeUrlDialog,
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.language_rounded, size: 16, color: Colors.blueAccent),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _currentUrl,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            // Prominent Change URL Action Button
-            Padding(
-              padding: const EdgeInsets.only(right: 2),
-              child: OutlinedButton.icon(
-                onPressed: _showChangeUrlDialog,
-                icon: const Icon(Icons.edit_location_alt_rounded, size: 15),
-                label: const Text(
-                  'Change URL',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  minimumSize: const Size(0, 32),
-                  side: const BorderSide(color: Colors.blueAccent, width: 1.2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-            // Refresh Button
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 22),
-              tooltip: 'Refresh App',
-              onPressed: () => _webViewController?.reload(),
-            ),
-            // Popup Menu Options
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert_rounded, size: 20),
-              tooltip: 'Options',
-              onSelected: (value) async {
-                if (value == 'change_url') {
-                  _showChangeUrlDialog();
-                } else if (value == 'refresh') {
-                  _webViewController?.reload();
-                } else if (value == 'clear_cache') {
-                  await _webViewController?.clearCache();
-                  await _webViewController?.reload();
-                  if (mounted) {
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Cache cleared & app refreshed.'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                } else if (value == 'toggle_theme') {
-                  widget.onToggleTheme();
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'change_url',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_location_alt_rounded, size: 18, color: Colors.blueAccent),
-                      SizedBox(width: 10),
-                      Text('Change Web Address'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'refresh',
-                  child: Row(
-                    children: [
-                      Icon(Icons.refresh_rounded, size: 18, color: Colors.green),
-                      SizedBox(width: 10),
-                      Text('Refresh App'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'clear_cache',
-                  child: Row(
-                    children: [
-                      Icon(Icons.cleaning_services_rounded, size: 18, color: Colors.orange),
-                      SizedBox(width: 10),
-                      Text('Clear Cache & Reload'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'toggle_theme',
-                  child: Row(
-                    children: [
-                      Icon(Icons.brightness_6_rounded, size: 18, color: Colors.purple),
-                      SizedBox(width: 10),
-                      Text('Toggle Theme'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        // Clean immersive view without normal top bar
         body: GestureDetector(
           onLongPress: _showChangeUrlDialog,
           child: Stack(
@@ -493,6 +347,60 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.blueAccent,
                   ),
                 ),
+              // Discrete floating menu icon button at top-right corner with ONLY ONE OPTION: Change URL
+              Positioned(
+                top: 40,
+                right: 12,
+                child: SafeArea(
+                  child: Container(
+                    height: 38,
+                    width: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.more_vert_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      tooltip: 'Menu',
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      onSelected: (value) {
+                        if (value == 'change_url') {
+                          _showChangeUrlDialog();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem<String>(
+                          value: 'change_url',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_location_alt_rounded, color: Colors.blueAccent, size: 20),
+                              SizedBox(width: 10),
+                              Text(
+                                'Change URL',
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
