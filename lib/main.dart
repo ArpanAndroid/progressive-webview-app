@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'firebase_security_service.dart';
 import 'native_webview_controller.dart';
 import 'progressive_webview_widget.dart';
 import 'remote_config_service.dart';
-import 'security_lock_screen.dart';
 import 'splash_screen.dart';
 
 void main() {
@@ -30,7 +28,6 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
   String _initialUrl = 'https://stables365.com/';
   bool _isLoadingInit = true;
   bool _showSplash = true;
-  ApprovalStatus? _approvalStatus;
 
   @override
   void initState() {
@@ -40,11 +37,9 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
 
   Future<void> _loadInitialState() async {
     final url = await RemoteConfigService.getTargetUrl();
-    final status = await FirebaseSecurityService.checkDeviceApproval();
     if (mounted) {
       setState(() {
         _initialUrl = url;
-        _approvalStatus = status;
         _isLoadingInit = false;
       });
     }
@@ -53,6 +48,12 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
   void _toggleTheme() {
     setState(() {
       _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    });
+  }
+
+  void _updateUrl(String newUrl) {
+    setState(() {
+      _initialUrl = newUrl;
     });
   }
 
@@ -87,24 +88,6 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
       );
     }
 
-    if (_approvalStatus != null && !_approvalStatus!.isApproved) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark(),
-        home: SecurityLockScreen(
-          initialStatus: _approvalStatus!,
-          onApproved: () async {
-            final newStatus = await FirebaseSecurityService.checkDeviceApproval();
-            if (mounted) {
-              setState(() {
-                _approvalStatus = newStatus;
-              });
-            }
-          },
-        ),
-      );
-    }
-
     return MaterialApp(
       title: 'Progressive App',
       debugShowCheckedModeBanner: false,
@@ -124,6 +107,7 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
       home: HomeScreen(
         initialUrl: _initialUrl,
         onToggleTheme: _toggleTheme,
+        onUrlChanged: _updateUrl,
       ),
     );
   }
@@ -132,11 +116,13 @@ class _ProgressiveWebViewAppState extends State<ProgressiveWebViewApp> {
 class HomeScreen extends StatefulWidget {
   final String initialUrl;
   final VoidCallback onToggleTheme;
+  final ValueChanged<String>? onUrlChanged;
 
   const HomeScreen({
     super.key,
     required this.initialUrl,
     required this.onToggleTheme,
+    this.onUrlChanged,
   });
 
   @override
@@ -166,6 +152,42 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _handleBackNavigation() async {
+    final canGoBack = await _webViewController?.canGoBack() ?? false;
+    if (canGoBack) {
+      await _webViewController?.goBack();
+    } else {
+      final now = DateTime.now();
+      if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+        _lastBackPressTime = now;
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.exit_to_app_rounded, color: Colors.amberAccent, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Press back again to close app',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      } else {
+        SystemNavigator.pop();
+      }
+    }
+  }
+
   Future<void> _loadAndSaveUrl(String inputUrl) async {
     String formattedUrl = inputUrl.trim();
     if (formattedUrl.isEmpty) return;
@@ -176,13 +198,18 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _currentUrl = formattedUrl;
       _urlTextController.text = formattedUrl;
+      _isLoading = true;
+      _loadingProgress = 0;
     });
+
+    widget.onUrlChanged?.call(formattedUrl);
 
     // Save URL persistently across app storage & remote config
     await RemoteConfigService.saveTargetUrl(formattedUrl);
 
-    // Load target URL directly into native WebView
-    await _webViewController?.loadUrl(formattedUrl);
+    // Clean WebView cache & load target URL directly into native WebView
+    await _webViewController?.clearCache(includeDiskFiles: true);
+    await _webViewController?.loadUrl(formattedUrl, clearCache: true);
 
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -193,13 +220,13 @@ class _HomeScreenState extends State<HomeScreen> {
               const Icon(Icons.check_circle_rounded, color: Colors.greenAccent),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('App URL saved & loaded: $formattedUrl'),
+                child: Text('Full App Target URL updated & loaded: $formattedUrl'),
               ),
             ],
           ),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 1),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -229,329 +256,230 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   void _showChangeUrlDialog() {
-    final controller = TextEditingController(text: _currentUrl);
     showDialog(
       context: context,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            final currentInput = controller.text.trim();
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.edit_location_alt_rounded, color: Colors.blueAccent),
-                  SizedBox(width: 10),
-                  Text('Change Web Address', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.language_rounded, color: Colors.blueAccent),
+              SizedBox(width: 10),
+              Text('Select Web Address', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.touch_app_rounded, size: 16, color: Colors.blueAccent),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Tap any website from the list to save and load instantly.',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
                       ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Column(
+                  children: _presetUrls.map((preset) {
+                    final presetUrl = preset['url']!;
+                    final isCurrentActive = _currentUrl == presetUrl;
 
-
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Quick Select Preset Option:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Column(
-                      children: _presetUrls.map((preset) {
-                        final presetUrl = preset['url']!;
-                        final isSelected = currentInput == presetUrl;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6.0),
-                          child: InkWell(
-                            onTap: () {
-                              setDialogState(() {
-                                controller.text = presetUrl;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Colors.blueAccent.withOpacity(0.15)
-                                    : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08)),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isSelected ? Colors.blueAccent : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-                                  width: isSelected ? 1.5 : 1.0,
-                                ),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _loadAndSaveUrl(presetUrl);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isCurrentActive
+                                ? Colors.blueAccent.withOpacity(0.15)
+                                : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isCurrentActive
+                                  ? Colors.blueAccent
+                                  : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                              width: isCurrentActive ? 1.5 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isCurrentActive ? Icons.check_circle_rounded : Icons.language_rounded,
+                                color: isCurrentActive ? Colors.greenAccent : Colors.blueAccent,
+                                size: 20,
                               ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                                    color: isSelected ? Colors.blueAccent : Colors.grey,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
                                       children: [
                                         Text(
                                           preset['title']!,
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                            color: isSelected ? Colors.blueAccent : (isDark ? Colors.white : Colors.black87),
+                                            fontSize: 14,
+                                            color: isCurrentActive
+                                                ? Colors.blueAccent
+                                                : (isDark ? Colors.white : Colors.black87),
                                           ),
                                         ),
-                                        Text(
-                                          presetUrl,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                        if (isCurrentActive) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.greenAccent.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: const Text(
+                                              'ACTIVE',
+                                              style: TextStyle(
+                                                color: Colors.greenAccent,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                        ],
                                       ],
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      presetUrl,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                            ],
                           ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Or enter target custom web URL:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                        ),
                       ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await _handleBackNavigation();
+      },
+      child: Scaffold(
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(54),
+          child: AppBar(
+            backgroundColor: const Color(0xFF0F172A),
+            elevation: 2,
+            titleSpacing: 0,
+            leading: IconButton(
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+              tooltip: 'Back Page',
+              onPressed: _handleBackNavigation,
+            ),
+
+            title: InkWell(
+              onTap: _showChangeUrlDialog,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.lock_outline_rounded,
+                      size: 14,
+                      color: Colors.greenAccent,
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: controller,
-                      autofocus: false,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (val) {
-                        setDialogState(() {});
-                      },
-                      onSubmitted: (val) {
-                        Navigator.pop(context);
-                        _loadAndSaveUrl(val);
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Website URL',
-                        hintText: 'https://stables365.com/',
-                        prefixIcon: const Icon(Icons.link_rounded),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _currentUrl,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.edit_location_alt_rounded,
+                  color: Colors.blueAccent,
+                  size: 22,
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    final newUrl = controller.text.trim();
-                    Navigator.pop(context);
-                    if (newUrl.isNotEmpty) {
-                      _loadAndSaveUrl(newUrl);
-                    }
-                  },
-                  icon: const Icon(Icons.save_rounded, size: 18),
-                  label: const Text('Save & Refresh'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _showSecurityInfoDialog() async {
-    final status = await FirebaseSecurityService.checkDeviceApproval();
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final isEnabled = FirebaseSecurityService.enableSecurityGate;
-
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.shield_outlined, color: Colors.greenAccent),
-                  SizedBox(width: 10),
-                  Text('Security & License'),
-                ],
+                tooltip: 'Change Custom URL',
+                onPressed: _showChangeUrlDialog,
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Device License Key:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    status.deviceKey,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('Gatekeeper Status:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        isEnabled ? Icons.security_rounded : Icons.gpp_maybe_rounded,
-                        color: isEnabled ? Colors.amber : Colors.green,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          isEnabled ? 'Firebase Approval Gate ACTIVE' : 'Firebase Gate Currently DISABLED (Direct Access)',
-                          style: TextStyle(
-                            color: isEnabled ? Colors.amber : Colors.green,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  const SizedBox(height: 10),
-                  SwitchListTile(
-                    value: isEnabled,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Enforce Firebase Security Gate', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Require Firebase DB admin approval before opening APK app.', style: TextStyle(fontSize: 11)),
-                    activeColor: Colors.amber,
-                    onChanged: (val) {
-                      setDialogState(() {
-                        FirebaseSecurityService.enableSecurityGate = val;
-                      });
-                      setState(() {});
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(val ? 'Firebase Security Enforcement Enabled!' : 'Firebase Security Enforcement Disabled!'),
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: status.deviceKey));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Copied key: ${status.deviceKey}'),
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                  child: const Text('Copy Key'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final messenger = ScaffoldMessenger.of(context);
-
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        final canGoBack = await _webViewController?.canGoBack() ?? false;
-        if (canGoBack) {
-          await _webViewController?.goBack();
-        } else {
-          final now = DateTime.now();
-          if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 1)) {
-            _lastBackPressTime = now;
-            if (mounted) {
-              messenger.hideCurrentSnackBar();
-              messenger.showSnackBar(
-                SnackBar(
-                  content: const Row(
-                    children: [
-                      Icon(Icons.exit_to_app_rounded, color: Colors.amberAccent, size: 20),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Do you want to close? Press back again to close app',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
-                  ),
-                  duration: const Duration(seconds: 1),
-                  behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-            }
-          } else {
-            SystemNavigator.pop();
-          }
-        }
-      },
-      child: Scaffold(
+              const SizedBox(width: 4),
+            ],
+          ),
+        ),
         body: GestureDetector(
           onLongPress: _showChangeUrlDialog,
           child: Stack(
@@ -564,10 +492,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   _webViewController = controller;
                 },
                 onProgress: (progress) {
-                  if (mounted) {
+                  if (mounted && _isLoading) {
                     setState(() {
                       _loadingProgress = progress;
-                      _isLoading = progress > 0 && progress < 100;
+                      if (progress >= 100) {
+                        _isLoading = false;
+                      }
                     });
                   }
                 },
@@ -577,6 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _currentUrl = url;
                       _urlTextController.text = url;
                       _isLoading = true;
+                      _loadingProgress = 0;
                     });
                   }
                 },
@@ -586,6 +517,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _currentUrl = url;
                       _urlTextController.text = url;
                       _isLoading = false;
+                      _loadingProgress = 100;
                     });
                   }
                 },
@@ -596,68 +528,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   left: 0,
                   right: 0,
                   child: LinearProgressIndicator(
-                    value: _loadingProgress > 0 ? _loadingProgress / 100.0 : null,
+                    value: _loadingProgress > 0 && _loadingProgress < 100 ? _loadingProgress / 100.0 : null,
                     minHeight: 3,
                     backgroundColor: Colors.transparent,
                     color: Colors.blueAccent,
                   ),
                 ),
-              Positioned(
-                top: 40,
-                right: 12,
-                child: SafeArea(
-                  child: Container(
-                    height: 38,
-                    width: 38,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.more_vert_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      padding: EdgeInsets.zero,
-                      tooltip: 'Menu',
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      onSelected: (value) {
-                        if (value == 'change_url') {
-                          _showChangeUrlDialog();
-                        } else if (value == 'security_info') {
-                          _showSecurityInfoDialog();
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem<String>(
-                          value: 'change_url',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_location_alt_rounded, color: Colors.blueAccent, size: 20),
-                              SizedBox(width: 10),
-                              Text(
-                                'Change URL',
-                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -665,3 +541,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+
+
+
+

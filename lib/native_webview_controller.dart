@@ -66,10 +66,11 @@ class NativeWebViewController {
     }
   }
 
-  Future<bool> loadUrl(String url, {Map<String, String>? headers}) async {
+  Future<bool> loadUrl(String url, {Map<String, String>? headers, bool clearCache = true}) async {
     try {
       final result = await _channel.invokeMethod<bool>('loadUrl', {
         'url': url,
+        'clearCache': clearCache,
         if (headers != null) 'headers': headers,
       });
       return result ?? false;

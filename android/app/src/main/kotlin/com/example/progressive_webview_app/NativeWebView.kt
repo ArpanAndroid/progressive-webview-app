@@ -94,9 +94,6 @@ class NativeWebView(
                 super.onProgressChanged(view, newProgress)
                 val args = mapOf("progress" to newProgress)
                 methodChannel.invokeMethod("onProgressChanged", args)
-                if (newProgress > 30) {
-                    injectTopHeaderDisableScript()
-                }
                 if (newProgress > 50 && isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
@@ -121,7 +118,7 @@ class NativeWebView(
                 callback?.invoke(origin, true, false)
             }
 
-            // Mobile app handles website popups and automatically closes them quickly if Turbo is active
+            // Mobile app handles website popups without forcefully auto-closing login/auth windows
             override fun onCreateWindow(
                 view: WebView?,
                 isDialog: Boolean,
@@ -136,21 +133,8 @@ class NativeWebView(
                 transport?.webView = popupWebView
                 resultMsg?.sendToTarget()
 
-                val delay = if (isTurboBetActive) 1000L else popupAutoCloseDelayMs
-                val args = mapOf("message" to "Website popup opened. Mobile app will auto-close in ${delay / 1000}s.")
+                val args = mapOf("message" to "Website window opened.")
                 methodChannel.invokeMethod("onPopupOpened", args)
-
-                // Auto-close website popup after delay
-                Handler(Looper.getMainLooper()).postDelayed({
-                    try {
-                        popupWebView.stopLoading()
-                        popupWebView.destroy()
-                        val closeArgs = mapOf("message" to "Website popup auto-closed by mobile app.")
-                        methodChannel.invokeMethod("onPopupAutoClosed", closeArgs)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }, delay)
 
                 return true
             }
@@ -172,8 +156,6 @@ class NativeWebView(
                     CookieManager.getInstance().flush()
                 }
                 
-                // Inject top header disable script & Turbo Bet acceleration
-                injectTopHeaderDisableScript()
                 if (isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
@@ -256,38 +238,6 @@ class NativeWebView(
         }
     }
 
-    private fun injectTopHeaderDisableScript() {
-        val jsScript = """
-            (function() {
-                const hideHeaders = function() {
-                    const headerSelectors = [
-                        'header', '#header', '.header', '.top-header', '.main-header',
-                        '.nav-header', '.navbar-top', '#top-header', '.top_bar', '.topbar',
-                        '[class*="top-header"]', '[class*="topHeader"]', '[id*="topHeader"]', '[id*="top-header"]'
-                    ];
-                    headerSelectors.forEach(function(selector) {
-                        document.querySelectorAll(selector).forEach(function(el) {
-                            if (el) {
-                                el.style.setProperty('display', 'none', 'important');
-                            }
-                        });
-                    });
-                };
-                hideHeaders();
-                if (!window.__topHeaderDisabledInjected) {
-                    window.__topHeaderDisabledInjected = true;
-                    setInterval(hideHeaders, 300);
-                    try {
-                        const observer = new MutationObserver(hideHeaders);
-                        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
-                    } catch(e) {}
-                }
-            })();
-        """.trimIndent()
-
-        webView.evaluateJavascript(jsScript, null)
-    }
-
     private fun injectTurboBetAccelerationScript() {
         val jsScript = """
             (function() {
@@ -332,6 +282,12 @@ class NativeWebView(
                         document.querySelectorAll(selector).forEach(function(el) {
                             if (!el || el.offsetParent === null) return;
                             const text = (el.innerText || el.textContent || '').trim();
+                            const textLower = text.toLowerCase();
+
+                            // Explicitly skip login/authentication popups or forms
+                            if (textLower.includes("login") || textLower.includes("sign in") || textLower.includes("password") || textLower.includes("register") || textLower.includes("auth")) {
+                                return;
+                            }
 
                             // Detect bet processing or cash out countdown popups (e.g. "5", "4", "3", "2", "1")
                             if (text.includes("being processed") || text.includes("Please wait") || text.includes("Cashout") || text.match(/\b[1-5]\b/)) {
@@ -401,7 +357,16 @@ class NativeWebView(
             "loadUrl" -> {
                 val url = call.argument<String>("url")
                 val headers = call.argument<Map<String, String>>("headers")
+                val clearCache = call.argument<Boolean>("clearCache") ?: true
                 if (url != null) {
+                    if (clearCache) {
+                        try {
+                            webView.clearCache(true)
+                            WebStorage.getInstance().deleteAllData()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
                     if (headers != null && headers.isNotEmpty()) {
                         webView.loadUrl(url, headers)
                     } else {
