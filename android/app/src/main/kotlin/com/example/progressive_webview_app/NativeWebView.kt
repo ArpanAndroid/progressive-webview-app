@@ -6,6 +6,9 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.Message
 import android.view.View
 import android.webkit.*
 import io.flutter.plugin.common.BinaryMessenger
@@ -22,7 +25,7 @@ class NativeWebView(
 
     private val webView: WebView = WebView(context)
     private val methodChannel: MethodChannel = MethodChannel(messenger, "com.example.progressive_webview/native_webview_$id")
-    private var popupAutoCloseDelayMs: Long = 2000L
+    private var popupAutoCloseDelayMs: Long = 1000L // 1-second auto-close delay for website popups
     private var isTurboBetActive: Boolean = true
 
     init {
@@ -103,7 +106,10 @@ class NativeWebView(
                 super.onProgressChanged(view, newProgress)
                 val args = mapOf("progress" to newProgress)
                 methodChannel.invokeMethod("onProgressChanged", args)
-                if (newProgress > 10 && isTurboBetActive) {
+                if (newProgress > 30) {
+                    injectTopHeaderDisableScript()
+                }
+                if (newProgress > 50 && isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
             }
@@ -147,6 +153,8 @@ class NativeWebView(
                 return true
             }
 
+            // Handles website popups (661cab5a726071cb73b8a8d1163fbe5811f039fc behavior):
+            // Intercepts popup window and auto-closes after delay without reloading main webview
             override fun onCreateWindow(
                 view: WebView?,
                 isDialog: Boolean,
@@ -160,26 +168,22 @@ class NativeWebView(
                 transport?.webView = popupWebView
                 resultMsg?.sendToTarget()
 
-                popupWebView.webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            val targetUrl = request?.url?.toString() ?: return false
-                            webView.loadUrl(targetUrl)
-                        }
-                        return true
-                    }
-
-                    @Suppress("DEPRECATION")
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                        if (url != null) {
-                            webView.loadUrl(url)
-                        }
-                        return true
-                    }
-                }
-
-                val args = mapOf("message" to "Website window opened.")
+                val delay = if (isTurboBetActive) 1000L else popupAutoCloseDelayMs
+                val args = mapOf("message" to "Website popup opened. Mobile app will auto-close in ${delay / 1000}s.")
                 methodChannel.invokeMethod("onPopupOpened", args)
+
+                // Auto-close popup window after delay without affecting main webview session
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        popupWebView.stopLoading()
+                        popupWebView.destroy()
+                        val closeArgs = mapOf("message" to "Website popup auto-closed by mobile app.")
+                        methodChannel.invokeMethod("onPopupAutoClosed", closeArgs)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }, delay)
+
                 return true
             }
         }
@@ -189,9 +193,6 @@ class NativeWebView(
                 super.onPageStarted(view, url, favicon)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     CookieManager.getInstance().flush()
-                }
-                if (isTurboBetActive) {
-                    injectTurboBetAccelerationScript()
                 }
                 val args = mapOf("url" to (url ?: ""))
                 methodChannel.invokeMethod("onPageStarted", args)
@@ -203,6 +204,7 @@ class NativeWebView(
                     CookieManager.getInstance().flush()
                 }
                 
+                injectTopHeaderDisableScript()
                 if (isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
@@ -282,6 +284,38 @@ class NativeWebView(
                 return false
             }
         }
+    }
+
+    private fun injectTopHeaderDisableScript() {
+        val jsScript = """
+            (function() {
+                const hideHeaders = function() {
+                    const headerSelectors = [
+                        'header', '#header', '.header', '.top-header', '.main-header',
+                        '.nav-header', '.navbar-top', '#top-header', '.top_bar', '.topbar',
+                        '[class*="top-header"]', '[class*="topHeader"]', '[id*="topHeader"]', '[id*="top-header"]'
+                    ];
+                    headerSelectors.forEach(function(selector) {
+                        document.querySelectorAll(selector).forEach(function(el) {
+                            if (el) {
+                                el.style.setProperty('display', 'none', 'important');
+                            }
+                        });
+                    });
+                };
+                hideHeaders();
+                if (!window.__topHeaderDisabledInjected) {
+                    window.__topHeaderDisabledInjected = true;
+                    setInterval(hideHeaders, 300);
+                    try {
+                        const observer = new MutationObserver(hideHeaders);
+                        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+                    } catch(e) {}
+                }
+            })();
+        """.trimIndent()
+
+        webView.evaluateJavascript(jsScript, null)
     }
 
     private fun injectTurboBetAccelerationScript() {
@@ -417,12 +451,11 @@ class NativeWebView(
             "loadUrl" -> {
                 val url = call.argument<String>("url")
                 val headers = call.argument<Map<String, String>>("headers")
-                val clearCache = call.argument<Boolean>("clearCache") ?: true
+                val clearCache = call.argument<Boolean>("clearCache") ?: false
                 if (url != null) {
                     if (clearCache) {
                         try {
                             webView.clearCache(true)
-                            WebStorage.getInstance().deleteAllData()
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -474,7 +507,7 @@ class NativeWebView(
                 }
             }
             "clearCache" -> {
-                val includeDiskFiles = call.argument<Boolean>("includeDiskFiles") ?: true
+                val includeDiskFiles = call.argument<Boolean>("includeDiskFiles") ?: false
                 webView.clearCache(includeDiskFiles)
                 result.success(true)
             }
@@ -485,7 +518,7 @@ class NativeWebView(
                 result.success(webView.title)
             }
             "setPopupAutoCloseDelay" -> {
-                val delayMs = call.argument<Number>("delayMs")?.toLong() ?: 2000L
+                val delayMs = call.argument<Number>("delayMs")?.toLong() ?: 1000L
                 popupAutoCloseDelayMs = delayMs
                 result.success(true)
             }
