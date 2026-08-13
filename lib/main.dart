@@ -210,26 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
     // Clean WebView cache & load target URL directly into native WebView
     await _webViewController?.clearCache(includeDiskFiles: true);
     await _webViewController?.loadUrl(formattedUrl, clearCache: true);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('Full App Target URL updated & loaded: $formattedUrl'),
-              ),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
   }
 
   static const List<Map<String, String>> _presetUrls = [
