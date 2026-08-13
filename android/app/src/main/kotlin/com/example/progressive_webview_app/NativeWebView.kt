@@ -55,17 +55,20 @@ class NativeWebView(
             settings.mediaPlaybackRequiresUserGesture = false
         }
 
+        // Standard Chrome Mobile User-Agent (Delivers 100% exact Chrome Android layout)
+        settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36"
+
         // Enable popup window handling by mobile app
         settings.setSupportMultipleWindows(true)
 
         // Cache mode for progressive responsiveness & offline handling
         settings.cacheMode = WebSettings.LOAD_DEFAULT
 
-        // Responsive Viewport Controls
-        settings.useWideViewPort = true
-        settings.loadWithOverviewMode = true
+        // Standard Mobile Viewport (Mobile flow for all sections below slider banner)
+        settings.useWideViewPort = false
+        settings.loadWithOverviewMode = false
         settings.setSupportZoom(true)
-        settings.builtInZoomControls = true
+        settings.builtInZoomControls = false
         settings.displayZoomControls = false
 
         // Security & Compatibility Config
@@ -84,8 +87,12 @@ class NativeWebView(
             cookieManager.flush()
         }
 
-        // Enable Hardware Acceleration on view level
+        // Enable Hardware Acceleration & smooth vertical scrolling for full page content
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        webView.isVerticalScrollBarEnabled = true
+        webView.isHorizontalScrollBarEnabled = false
+        webView.isScrollContainer = true
+        webView.overScrollMode = View.OVER_SCROLL_ALWAYS
     }
 
     private fun configureChildWebViewSettings(childWebView: WebView) {

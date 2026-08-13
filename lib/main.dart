@@ -399,46 +399,48 @@ class _HomeScreenState extends State<HomeScreen> {
           onLongPress: _showChangeUrlDialog,
           child: Stack(
             children: [
-              // Main Full Screen WebView with SafeArea for mobile status bar protection
+              // Main Full Screen WebView with 30dp Top Padding below status bar / floating controls
               SafeArea(
-                bottom: false,
-                child: ProgressiveWebViewWidget(
-                  initialUrl: _currentUrl,
-                  isTurboActive: _isTurboActive,
-                  onRequestChangeUrl: _showChangeUrlDialog,
-                  onWebViewCreated: (controller) {
-                    _webViewController = controller;
-                  },
-                  onProgress: (progress) {
-                    if (mounted && _isLoading) {
-                      setState(() {
-                        _loadingProgress = progress;
-                        if (progress >= 100) {
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 30),
+                  child: ProgressiveWebViewWidget(
+                    initialUrl: _currentUrl,
+                    isTurboActive: _isTurboActive,
+                    onRequestChangeUrl: _showChangeUrlDialog,
+                    onWebViewCreated: (controller) {
+                      _webViewController = controller;
+                    },
+                    onProgress: (progress) {
+                      if (mounted && _isLoading) {
+                        setState(() {
+                          _loadingProgress = progress;
+                          if (progress >= 100) {
+                            _isLoading = false;
+                          }
+                        });
+                      }
+                    },
+                    onPageStarted: (url) {
+                      if (mounted) {
+                        setState(() {
+                          _currentUrl = url;
+                          _urlTextController.text = url;
+                          _isLoading = true;
+                          _loadingProgress = 0;
+                        });
+                      }
+                    },
+                    onPageFinished: (url) {
+                      if (mounted) {
+                        setState(() {
+                          _currentUrl = url;
+                          _urlTextController.text = url;
                           _isLoading = false;
-                        }
-                      });
-                    }
-                  },
-                  onPageStarted: (url) {
-                    if (mounted) {
-                      setState(() {
-                        _currentUrl = url;
-                        _urlTextController.text = url;
-                        _isLoading = true;
-                        _loadingProgress = 0;
-                      });
-                    }
-                  },
-                  onPageFinished: (url) {
-                    if (mounted) {
-                      setState(() {
-                        _currentUrl = url;
-                        _urlTextController.text = url;
-                        _isLoading = false;
-                        _loadingProgress = 100;
-                      });
-                    }
-                  },
+                          _loadingProgress = 100;
+                        });
+                      }
+                    },
+                  ),
                 ),
               ),
 
@@ -458,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Left Floating Small Dot Button (Opens Change Web Address Dialog)
               Positioned(
-                top: 10,
+                top: 2,
                 left: 10,
                 child: SafeArea(
                   child: Material(
@@ -493,7 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Right Floating Back Button (Page Back Navigation)
               Positioned(
-                top: 10,
+                top: 2,
                 right: 10,
                 child: SafeArea(
                   child: Material(
