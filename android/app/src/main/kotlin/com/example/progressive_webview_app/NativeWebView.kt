@@ -293,7 +293,12 @@ class NativeWebView(
                     const headerSelectors = [
                         'header', '#header', '.header', '.top-header', '.main-header',
                         '.nav-header', '.navbar-top', '#top-header', '.top_bar', '.topbar',
-                        '[class*="top-header"]', '[class*="topHeader"]', '[id*="topHeader"]', '[id*="top-header"]'
+                        '.action-bar', '.actionbar', '.sub-header', '.subheader', '.app-bar', '.appbar',
+                        '.top-nav', '.topnav', '.header-bar', '.headerbar', '.notice-bar', '.announcement-bar',
+                        '[class*="top-header"]', '[class*="topHeader"]', '[id*="topHeader"]', '[id*="top-header"]',
+                        '[class*="actionbar"]', '[class*="action-bar"]', '[class*="subheader"]', '[class*="sub-header"]',
+                        '[class*="topbar"]', '[class*="top-bar"]', '[class*="appbar"]', '[class*="app-bar"]',
+                        '[class*="top-banner"]', '[class*="topBanner"]', '[class*="notice-bar"]'
                     ];
                     headerSelectors.forEach(function(selector) {
                         document.querySelectorAll(selector).forEach(function(el) {
@@ -358,7 +363,8 @@ class NativeWebView(
 
                     const modalSelectors = [
                         '.sweet-alert', '.swal2-container', '.swal-overlay',
-                        '[class*="bet"]', '[class*="cashout"]', '[class*="slip"]'
+                        '[class*="bet"]', '[class*="cashout"]', '[class*="slip"]',
+                        '[class*="top-dialog"]', '[class*="top-popup"]', '[class*="notice-dialog"]'
                     ];
 
                     const now = Date.now();
