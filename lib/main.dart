@@ -463,43 +463,46 @@ class _HomeScreenState extends State<HomeScreen> {
           onLongPress: _showChangeUrlDialog,
           child: Stack(
             children: [
-              ProgressiveWebViewWidget(
-                initialUrl: _currentUrl,
-                isTurboActive: _isTurboActive,
-                onRequestChangeUrl: _showChangeUrlDialog,
-                onWebViewCreated: (controller) {
-                  _webViewController = controller;
-                },
-                onProgress: (progress) {
-                  if (mounted && _isLoading) {
-                    setState(() {
-                      _loadingProgress = progress;
-                      if (progress >= 100) {
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: ProgressiveWebViewWidget(
+                  initialUrl: _currentUrl,
+                  isTurboActive: _isTurboActive,
+                  onRequestChangeUrl: _showChangeUrlDialog,
+                  onWebViewCreated: (controller) {
+                    _webViewController = controller;
+                  },
+                  onProgress: (progress) {
+                    if (mounted && _isLoading) {
+                      setState(() {
+                        _loadingProgress = progress;
+                        if (progress >= 100) {
+                          _isLoading = false;
+                        }
+                      });
+                    }
+                  },
+                  onPageStarted: (url) {
+                    if (mounted) {
+                      setState(() {
+                        _currentUrl = url;
+                        _urlTextController.text = url;
+                        _isLoading = true;
+                        _loadingProgress = 0;
+                      });
+                    }
+                  },
+                  onPageFinished: (url) {
+                    if (mounted) {
+                      setState(() {
+                        _currentUrl = url;
+                        _urlTextController.text = url;
                         _isLoading = false;
-                      }
-                    });
-                  }
-                },
-                onPageStarted: (url) {
-                  if (mounted) {
-                    setState(() {
-                      _currentUrl = url;
-                      _urlTextController.text = url;
-                      _isLoading = true;
-                      _loadingProgress = 0;
-                    });
-                  }
-                },
-                onPageFinished: (url) {
-                  if (mounted) {
-                    setState(() {
-                      _currentUrl = url;
-                      _urlTextController.text = url;
-                      _isLoading = false;
-                      _loadingProgress = 100;
-                    });
-                  }
-                },
+                        _loadingProgress = 100;
+                      });
+                    }
+                  },
+                ),
               ),
               if (_isLoading)
                 Positioned(

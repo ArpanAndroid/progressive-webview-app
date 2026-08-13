@@ -290,6 +290,13 @@ class NativeWebView(
         val jsScript = """
             (function() {
                 const hideHeaders = function() {
+                    if (document.body) {
+                        document.body.style.setProperty('padding-top', '10px', 'important');
+                    }
+                    if (document.documentElement) {
+                        document.documentElement.style.setProperty('padding-top', '10px', 'important');
+                    }
+
                     const headerSelectors = [
                         'header', '#header', '.header', '.top-header', '.main-header',
                         '.nav-header', '.navbar-top', '#top-header', '.top_bar', '.topbar',
@@ -302,9 +309,22 @@ class NativeWebView(
                     ];
                     headerSelectors.forEach(function(selector) {
                         document.querySelectorAll(selector).forEach(function(el) {
-                            if (el) {
-                                el.style.setProperty('display', 'none', 'important');
+                            if (!el) return;
+
+                            // Do NOT hide headers or elements that contain login, register, or auth buttons
+                            const textLower = (el.innerText || el.textContent || '').toLowerCase();
+                            const hasLoginBtn = textLower.includes("login") || 
+                                                textLower.includes("sign in") || 
+                                                textLower.includes("register") || 
+                                                textLower.includes("sign up") || 
+                                                textLower.includes("log in") ||
+                                                el.querySelector('button[class*="login"], a[href*="login"], input[name*="login"], [class*="login"], [class*="user"], [class*="auth"]');
+
+                            if (hasLoginBtn) {
+                                return;
                             }
+
+                            el.style.setProperty('display', 'none', 'important');
                         });
                     });
                 };
