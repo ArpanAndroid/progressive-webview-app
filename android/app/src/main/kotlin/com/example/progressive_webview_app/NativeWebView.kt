@@ -6,9 +6,6 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.os.Message
 import android.view.View
 import android.webkit.*
 import io.flutter.plugin.common.BinaryMessenger
@@ -25,7 +22,7 @@ class NativeWebView(
 
     private val webView: WebView = WebView(context)
     private val methodChannel: MethodChannel = MethodChannel(messenger, "com.example.progressive_webview/native_webview_$id")
-    private var popupAutoCloseDelayMs: Long = 2000L // 2-second auto-close delay for dialogs/popups
+    private var popupAutoCloseDelayMs: Long = 2000L
     private var isTurboBetActive: Boolean = true
 
     init {
@@ -33,7 +30,7 @@ class NativeWebView(
         configureWebViewSettings()
         setupWebViewClients()
 
-        val initialUrl = params?.get("initialUrl") as? String ?: "https://stables365.com/cricket-betting/1793/1705297"
+        val initialUrl = params?.get("initialUrl") as? String ?: "https://stables365.com/"
         val headers = params?.get("headers") as? Map<String, String>
         if (headers != null && headers.isNotEmpty()) {
             webView.loadUrl(initialUrl, headers)
@@ -88,6 +85,18 @@ class NativeWebView(
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     }
 
+    private fun configureChildWebViewSettings(childWebView: WebView) {
+        val settings = childWebView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.databaseEnabled = true
+        settings.javaScriptCanOpenWindowsAutomatically = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            CookieManager.getInstance().setAcceptThirdPartyCookies(childWebView, true)
+        }
+    }
+
     private fun setupWebViewClients() {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -125,13 +134,6 @@ class NativeWebView(
                 result: JsResult?
             ): Boolean {
                 result?.confirm()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    try {
-                        webView.reload()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }, popupAutoCloseDelayMs)
                 return true
             }
 
@@ -142,17 +144,9 @@ class NativeWebView(
                 result: JsResult?
             ): Boolean {
                 result?.confirm()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    try {
-                        webView.reload()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }, popupAutoCloseDelayMs)
                 return true
             }
 
-            // Mobile app handles website popups and auto-dismisses non-auth dialogs after 2 seconds
             override fun onCreateWindow(
                 view: WebView?,
                 isDialog: Boolean,
@@ -160,29 +154,32 @@ class NativeWebView(
                 resultMsg: Message?
             ): Boolean {
                 val popupWebView = WebView(context)
-                popupWebView.settings.javaScriptEnabled = true
-                popupWebView.settings.domStorageEnabled = true
+                configureChildWebViewSettings(popupWebView)
 
                 val transport = resultMsg?.obj as? WebView.WebViewTransport
                 transport?.webView = popupWebView
                 resultMsg?.sendToTarget()
 
+                popupWebView.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            val targetUrl = request?.url?.toString() ?: return false
+                            webView.loadUrl(targetUrl)
+                        }
+                        return true
+                    }
+
+                    @Suppress("DEPRECATION")
+                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                        if (url != null) {
+                            webView.loadUrl(url)
+                        }
+                        return true
+                    }
+                }
+
                 val args = mapOf("message" to "Website window opened.")
                 methodChannel.invokeMethod("onPopupOpened", args)
-
-                // Auto-dismiss popup window after 2 seconds (2000ms) and reload website
-                Handler(Looper.getMainLooper()).postDelayed({
-                    try {
-                        popupWebView.stopLoading()
-                        popupWebView.destroy()
-                        webView.reload()
-                        val argsAuto = mapOf("message" to "Website 5 sec dialog auto-dismissed after 2s & website reloaded.")
-                        methodChannel.invokeMethod("onPopupAutoClosed", argsAuto)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }, popupAutoCloseDelayMs)
-
                 return true
             }
         }
@@ -215,7 +212,6 @@ class NativeWebView(
             }
 
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-                // Prevent app breakage/hanging on SSL certificate updates
                 handler?.proceed()
             }
 
@@ -295,19 +291,17 @@ class NativeWebView(
                 if (window.__turboBetEngineInjected) return;
                 window.__turboBetEngineInjected = true;
 
-                console.log("Turbo Bet Engine & 2-Sec Dialog Dismissal Active");
+                console.log("Turbo Bet Engine Active");
 
-                // Speed up short JavaScript timers & force 5-sec dialog auto-close timeouts to 2 seconds
+                // Speed up short JavaScript timers without affecting auth/navigation
                 const originalSetInterval = window.setInterval;
                 const originalSetTimeout = window.setTimeout;
 
                 window.setInterval = function(fn, delay, ...args) {
                     if (window.__turboBetActive && delay && typeof delay === 'number') {
                         if (delay >= 4000 && delay <= 6000) {
-                            // Accelerate 5-second countdown intervals to 400ms per tick (5 ticks = 2s total)
                             delay = 400;
                         } else if (delay >= 900 && delay <= 10000) {
-                            // Speed up 1 to 10 second countdown timers by 2.5x
                             delay = Math.max(100, Math.floor(delay / 2.5));
                         }
                     }
@@ -317,31 +311,20 @@ class NativeWebView(
                 window.setTimeout = function(fn, delay, ...args) {
                     if (window.__turboBetActive && delay && typeof delay === 'number') {
                         if (delay >= 4000 && delay <= 6000) {
-                            // Force 5-second dialog/popup dismissal timeouts to fire at 2000ms (2 seconds)
                             delay = 2000;
                         } else if (delay > 2000 && delay <= 10000) {
-                            // Cap any long status modal/dialog delay (> 2s up to 10s) at 2000ms
                             delay = 2000;
                         }
                     }
                     return originalSetTimeout.call(this, fn, delay, ...args);
                 };
 
-                // Continuous DOM monitor: enforce auto-dismissal after 2 seconds (2000ms) strictly for website 5-second countdown & bet processing dialogs
                 const dismiss5SecCountdownDialogs = function() {
                     if (!window.__turboBetActive) return;
 
                     const modalSelectors = [
-                        '.popup', '.modal', '#popup', '#modal', '.overlay', '.dialog', '.toast', '.alert',
-                        '.sweet-alert', '.swal2-container', '.swal-overlay', '.toast-container', '.v-dialog',
-                        '.element-dialog', '.MuiDialog-root', '.ant-modal', '[role="dialog"]', '[role="alertdialog"]',
-                        '[class*="popup"]', '[class*="modal"]', '[id*="popup"]', '[id*="modal"]',
-                        '[class*="overlay"]', '[class*="dialog"]', '[class*="toast"]', '[class*="alert"]',
-                        '[class*="bet"]', '[class*="cashout"]', '[class*="confirm"]', '[class*="success"]',
-                        '[class*="placed"]', '[class*="notice"]', '[class*="msg"]', '[class*="message"]',
-                        '[class*="status"]', '[class*="snack"]', '[class*="notification"]', '[class*="receipt"]',
-                        '[class*="slip"]', '[class*="banner"]', '[class*="loader"]', '[class*="processing"]',
-                        'div[style*="fixed"]', 'div[style*="absolute"]'
+                        '.sweet-alert', '.swal2-container', '.swal-overlay',
+                        '[class*="bet"]', '[class*="cashout"]', '[class*="slip"]'
                     ];
 
                     const now = Date.now();
@@ -350,7 +333,6 @@ class NativeWebView(
                         document.querySelectorAll(selector).forEach(function(el) {
                             if (!el) return;
 
-                            // Check visibility
                             const style = window.getComputedStyle(el);
                             if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || el.offsetParent === null) {
                                 delete el.__5secCountdownFirstSeen;
@@ -360,93 +342,41 @@ class NativeWebView(
                             const text = (el.innerText || el.textContent || '').trim();
                             const textLower = text.toLowerCase();
 
-                            // Explicitly skip login/authentication, registration, deposit, password, settings or profile popups
+                            // Explicitly skip login, authentication, registration, deposit, password, settings or profile popups
                             if (textLower.includes("login") || textLower.includes("sign in") || textLower.includes("password") || 
                                 textLower.includes("register") || textLower.includes("auth") || textLower.includes("captcha") ||
                                 textLower.includes("username") || textLower.includes("otp") || textLower.includes("deposit") ||
                                 textLower.includes("withdraw") || textLower.includes("wallet") || textLower.includes("profile") ||
-                                textLower.includes("settings") || textLower.includes("account") || textLower.includes("help")) {
+                                textLower.includes("settings") || textLower.includes("account") || textLower.includes("help") ||
+                                textLower.includes("user") || textLower.includes("pass")) {
                                 return;
                             }
 
-                            // Universal detection for website 5-second countdown & bet placement/processing dialogs
-                            const has5SecCountdownNumber = /\b[1-5]\b/.test(text);
                             const isBetProcessingDialog = 
-                                textLower.includes("bet") || 
-                                textLower.includes("being processed") || 
-                                textLower.includes("processing") || 
-                                textLower.includes("please wait") || 
-                                textLower.includes("processing bet") || 
                                 textLower.includes("bet placed") || 
                                 textLower.includes("bet accepted") || 
-                                textLower.includes("submitted") || 
-                                textLower.includes("pending") || 
-                                textLower.includes("stake") || 
-                                textLower.includes("odds") || 
-                                textLower.includes("matched") || 
-                                textLower.includes("cashout") || 
-                                textLower.includes("success") || 
-                                textLower.includes("done") || 
-                                textLower.includes("confirm");
+                                textLower.includes("matched");
 
-                            if (has5SecCountdownNumber || isBetProcessingDialog) {
-                                // Track when this 5-second countdown dialog first appeared
+                            if (isBetProcessingDialog) {
                                 if (!el.__5secCountdownFirstSeen) {
                                     el.__5secCountdownFirstSeen = now;
                                 }
 
-                                // Fast-forward countdown element numbers (5, 4, 3, 2, 1 -> 0)
-                                const countElems = el.querySelectorAll('span, div, p, h1, h2, h3, h4, b, strong');
-                                countElems.forEach(function(c) {
-                                    const val = (c.innerText || '').trim();
-                                    if (/^[1-5]$/.test(val)) {
-                                        c.innerText = '0';
-                                    }
-                                });
-
-                                // Look for immediate action buttons (e.g. auto-confirm)
-                                const actionBtn = el.querySelector('button.active, .btn-primary, [class*="confirm"], [class*="submit"]');
-                                if (actionBtn && !actionBtn.dataset.turboClicked) {
-                                    actionBtn.dataset.turboClicked = "true";
-                                    setTimeout(function() { try { actionBtn.click(); } catch(e){} }, 50);
-                                }
-
-                                // DISMISS ONLY AFTER 2 SECONDS (2000ms) FOR 5-SEC COUNTDOWN DIALOG
                                 if (now - el.__5secCountdownFirstSeen >= 2000) {
-                                    // 1. Try to click close / ok / dismiss button if available
-                                    const closeBtn = el.querySelector('.close, .btn-close, [class*="close"], [class*="dismiss"], [class*="cancel"], [class*="ok"], [class*="done"], [class*="accept"], button');
+                                    const closeBtn = el.querySelector('.close, .btn-close, [class*="close"], [class*="dismiss"], button');
                                     if (closeBtn && !closeBtn.dataset.turboDismissed) {
                                         closeBtn.dataset.turboDismissed = "true";
                                         try { closeBtn.click(); } catch(e){}
                                     }
-
-                                    // 2. Direct DOM dismiss/hide to guarantee disappearance after 2 sec
                                     el.style.setProperty('display', 'none', 'important');
                                     el.style.setProperty('visibility', 'hidden', 'important');
-                                    el.style.setProperty('opacity', '0', 'important');
-                                    el.style.setProperty('pointer-events', 'none', 'important');
-
-                                    // 3. Automatically reload website after 5-sec countdown dialog auto-closes at 2s
-                                    if (!el.__turboReloadTriggered) {
-                                        el.__turboReloadTriggered = true;
-                                        setTimeout(function() {
-                                            try {
-                                                window.location.reload();
-                                            } catch(e) {}
-                                        }, 200);
-                                    }
                                 }
                             }
                         });
                     });
                 };
 
-                setInterval(dismiss5SecCountdownDialogs, 100);
-
-                try {
-                    const observer = new MutationObserver(dismiss5SecCountdownDialogs);
-                    observer.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });
-                } catch(e) {}
+                setInterval(dismiss5SecCountdownDialogs, 300);
             })();
         """.trimIndent()
 

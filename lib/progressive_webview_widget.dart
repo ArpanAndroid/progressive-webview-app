@@ -45,6 +45,7 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
   bool _hasError = false;
   String _errorMessage = '';
   String _failingUrl = '';
+  String? _currentWebViewUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -225,12 +226,15 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
   void didUpdateWidget(covariant ProgressiveWebViewWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialUrl != widget.initialUrl) {
-      if (mounted) {
-        setState(() {
-          _hasError = false;
-        });
+      if (_currentWebViewUrl != widget.initialUrl) {
+        _currentWebViewUrl = widget.initialUrl;
+        if (mounted) {
+          setState(() {
+            _hasError = false;
+          });
+        }
+        _controller?.loadUrl(widget.initialUrl, clearCache: false);
       }
-      _controller?.loadUrl(widget.initialUrl);
     }
     if (oldWidget.isTurboActive != widget.isTurboActive) {
       _controller?.setTurboBetEnabled(widget.isTurboActive);
@@ -257,6 +261,7 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
     };
 
     controller.onPageStarted = (url) {
+      _currentWebViewUrl = url;
       if (mounted) {
         setState(() {
           _hasError = false;
@@ -266,6 +271,7 @@ class _ProgressiveWebViewWidgetState extends State<ProgressiveWebViewWidget> {
     };
 
     controller.onPageFinished = (url) {
+      _currentWebViewUrl = url;
       widget.onPageFinished?.call(url);
     };
 

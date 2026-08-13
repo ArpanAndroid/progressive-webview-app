@@ -207,9 +207,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // Save URL persistently across app storage & remote config
     await RemoteConfigService.saveTargetUrl(formattedUrl);
 
-    // Clean WebView cache & load target URL directly into native WebView
-    await _webViewController?.clearCache(includeDiskFiles: true);
-    await _webViewController?.loadUrl(formattedUrl, clearCache: true);
+    // Load target URL into native WebView without clearing cookies/session storage
+    await _webViewController?.loadUrl(formattedUrl, clearCache: false);
   }
 
   static const List<Map<String, String>> _presetUrls = [
