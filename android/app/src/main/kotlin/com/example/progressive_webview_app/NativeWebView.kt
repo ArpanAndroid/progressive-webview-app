@@ -106,9 +106,6 @@ class NativeWebView(
                 super.onProgressChanged(view, newProgress)
                 val args = mapOf("progress" to newProgress)
                 methodChannel.invokeMethod("onProgressChanged", args)
-                if (newProgress > 30) {
-                    injectTopHeaderDisableScript()
-                }
                 if (newProgress > 50 && isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
@@ -204,7 +201,6 @@ class NativeWebView(
                     CookieManager.getInstance().flush()
                 }
                 
-                injectTopHeaderDisableScript()
                 if (isTurboBetActive) {
                     injectTurboBetAccelerationScript()
                 }
@@ -284,63 +280,6 @@ class NativeWebView(
                 return false
             }
         }
-    }
-
-    private fun injectTopHeaderDisableScript() {
-        val jsScript = """
-            (function() {
-                const hideHeaders = function() {
-                    if (document.body) {
-                        document.body.style.setProperty('padding-top', '10px', 'important');
-                    }
-                    if (document.documentElement) {
-                        document.documentElement.style.setProperty('padding-top', '10px', 'important');
-                    }
-
-                    const headerSelectors = [
-                        'header', '#header', '.header', '.top-header', '.main-header',
-                        '.nav-header', '.navbar-top', '#top-header', '.top_bar', '.topbar',
-                        '.action-bar', '.actionbar', '.sub-header', '.subheader', '.app-bar', '.appbar',
-                        '.top-nav', '.topnav', '.header-bar', '.headerbar', '.notice-bar', '.announcement-bar',
-                        '[class*="top-header"]', '[class*="topHeader"]', '[id*="topHeader"]', '[id*="top-header"]',
-                        '[class*="actionbar"]', '[class*="action-bar"]', '[class*="subheader"]', '[class*="sub-header"]',
-                        '[class*="topbar"]', '[class*="top-bar"]', '[class*="appbar"]', '[class*="app-bar"]',
-                        '[class*="top-banner"]', '[class*="topBanner"]', '[class*="notice-bar"]'
-                    ];
-                    headerSelectors.forEach(function(selector) {
-                        document.querySelectorAll(selector).forEach(function(el) {
-                            if (!el) return;
-
-                            // Do NOT hide headers or elements that contain login, register, or auth buttons
-                            const textLower = (el.innerText || el.textContent || '').toLowerCase();
-                            const hasLoginBtn = textLower.includes("login") || 
-                                                textLower.includes("sign in") || 
-                                                textLower.includes("register") || 
-                                                textLower.includes("sign up") || 
-                                                textLower.includes("log in") ||
-                                                el.querySelector('button[class*="login"], a[href*="login"], input[name*="login"], [class*="login"], [class*="user"], [class*="auth"]');
-
-                            if (hasLoginBtn) {
-                                return;
-                            }
-
-                            el.style.setProperty('display', 'none', 'important');
-                        });
-                    });
-                };
-                hideHeaders();
-                if (!window.__topHeaderDisabledInjected) {
-                    window.__topHeaderDisabledInjected = true;
-                    setInterval(hideHeaders, 300);
-                    try {
-                        const observer = new MutationObserver(hideHeaders);
-                        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
-                    } catch(e) {}
-                }
-            })();
-        """.trimIndent()
-
-        webView.evaluateJavascript(jsScript, null)
     }
 
     private fun injectTurboBetAccelerationScript() {

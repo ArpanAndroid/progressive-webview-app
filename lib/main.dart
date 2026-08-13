@@ -395,76 +395,13 @@ class _HomeScreenState extends State<HomeScreen> {
         await _handleBackNavigation();
       },
       child: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(54),
-          child: AppBar(
-            backgroundColor: const Color(0xFF0F172A),
-            elevation: 2,
-            titleSpacing: 0,
-            leading: IconButton(
-              icon: const Icon(
-                Icons.arrow_back_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-              tooltip: 'Back Page',
-              onPressed: _handleBackNavigation,
-            ),
-
-            title: InkWell(
-              onTap: _showChangeUrlDialog,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.lock_outline_rounded,
-                      size: 14,
-                      color: Colors.greenAccent,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _currentUrl,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(
-                  Icons.edit_location_alt_rounded,
-                  color: Colors.blueAccent,
-                  size: 22,
-                ),
-                tooltip: 'Change Custom URL',
-                onPressed: _showChangeUrlDialog,
-              ),
-              const SizedBox(width: 4),
-            ],
-          ),
-        ),
         body: GestureDetector(
           onLongPress: _showChangeUrlDialog,
           child: Stack(
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
+              // Main Full Screen WebView with SafeArea for mobile status bar protection
+              SafeArea(
+                bottom: false,
                 child: ProgressiveWebViewWidget(
                   initialUrl: _currentUrl,
                   isTurboActive: _isTurboActive,
@@ -504,6 +441,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
+
+              // Top Loading Indicator
               if (_isLoading)
                 Positioned(
                   top: 0,
@@ -516,6 +455,76 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.blueAccent,
                   ),
                 ),
+
+              // Left Floating Small Dot Button (Opens Change Web Address Dialog)
+              Positioned(
+                top: 10,
+                left: 10,
+                child: SafeArea(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _showChangeUrlDialog,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withOpacity(0.75),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(0.25), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.circle_rounded,
+                          size: 13,
+                          color: Colors.blueAccent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Right Floating Back Button (Page Back Navigation)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: SafeArea(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _handleBackNavigation,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withOpacity(0.75),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(0.25), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_rounded,
+                          size: 17,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
