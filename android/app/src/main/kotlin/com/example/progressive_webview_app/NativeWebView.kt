@@ -330,7 +330,8 @@ class NativeWebView(
                     const modalSelectors = [
                         '.sweet-alert', '.swal2-container', '.swal-overlay',
                         '[class*="bet"]', '[class*="cashout"]', '[class*="slip"]',
-                        '[class*="top-dialog"]', '[class*="top-popup"]', '[class*="notice-dialog"]'
+                        '[class*="top-dialog"]', '[class*="top-popup"]', '[class*="notice-dialog"]',
+                        '[class*="modal"]', '[class*="dialog"]', '[class*="popup"]'
                     ];
 
                     const now = Date.now();
@@ -358,31 +359,52 @@ class NativeWebView(
                                 return;
                             }
 
+                            const has5SecCountdownNumber = /\b[1-5]\b/.test(text);
                             const isBetProcessingDialog = 
+                                textLower.includes("bet") || 
+                                textLower.includes("being processed") || 
+                                textLower.includes("processing") || 
+                                textLower.includes("please wait") || 
+                                textLower.includes("processing bet") || 
                                 textLower.includes("bet placed") || 
                                 textLower.includes("bet accepted") || 
-                                textLower.includes("matched");
+                                textLower.includes("submitted") || 
+                                textLower.includes("pending") || 
+                                textLower.includes("stake") || 
+                                textLower.includes("odds") || 
+                                textLower.includes("matched") || 
+                                textLower.includes("cashout") || 
+                                textLower.includes("success") || 
+                                textLower.includes("done") || 
+                                textLower.includes("confirm");
 
-                            if (isBetProcessingDialog) {
+                            if (has5SecCountdownNumber || isBetProcessingDialog) {
                                 if (!el.__5secCountdownFirstSeen) {
                                     el.__5secCountdownFirstSeen = now;
                                 }
-
-                                if (now - el.__5secCountdownFirstSeen >= 2000) {
-                                    const closeBtn = el.querySelector('.close, .btn-close, [class*="close"], [class*="dismiss"], button');
+////change in 1 sec
+                                if (now - el.__5secCountdownFirstSeen >= 1000) {
+                                    const closeBtn = el.querySelector('.close, .btn-close, [class*="close"], [class*="dismiss"], [class*="cancel"], [class*="ok"], [class*="done"], [class*="accept"], button');
                                     if (closeBtn && !closeBtn.dataset.turboDismissed) {
                                         closeBtn.dataset.turboDismissed = "true";
                                         try { closeBtn.click(); } catch(e){}
                                     }
                                     el.style.setProperty('display', 'none', 'important');
                                     el.style.setProperty('visibility', 'hidden', 'important');
+                                    el.style.setProperty('opacity', '0', 'important');
+                                    el.style.setProperty('pointer-events', 'none', 'important');
                                 }
                             }
                         });
                     });
                 };
 
-                setInterval(dismiss5SecCountdownDialogs, 300);
+                setInterval(dismiss5SecCountdownDialogs, 150);
+
+                try {
+                    const observer = new MutationObserver(dismiss5SecCountdownDialogs);
+                    observer.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });
+                } catch(e) {}
             })();
         """.trimIndent()
 
