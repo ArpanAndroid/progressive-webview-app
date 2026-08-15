@@ -37,21 +37,24 @@ class NativeWebViewEngine(
 
     @Keep
     inner class AndroidBridge {
-        private var lastReloadTimestamp: Long = 0L
+        private var lastDismissTimestamp: Long = 0L
+
+        @JavascriptInterface
+        fun onCountdownDialogDetected(dialogText: String?) {
+            val now = System.currentTimeMillis()
+            if (now - lastDismissTimestamp < 1000) {
+                return // Throttle duplicate callbacks
+            }
+            lastDismissTimestamp = now
+
+            Handler(Looper.getMainLooper()).post {
+                listener.onPopupAutoClosed("Betting processing dialog auto-dismissed after 2 seconds.")
+            }
+        }
 
         @JavascriptInterface
         fun onCountdownDialogDetected(url: String?, dialogText: String?) {
-            val now = System.currentTimeMillis()
-            if (now - lastReloadTimestamp < 2000) {
-                return // Prevent duplicate reloads within 2 seconds
-            }
-            lastReloadTimestamp = now
-
-            Handler(Looper.getMainLooper()).post {
-                val currentUrl = webView.url ?: url ?: ""
-                webView.reload()
-                listener.onPopupAutoClosed("2-second betting countdown dialog closed, webpage reloaded.")
-            }
+            onCountdownDialogDetected(dialogText)
         }
 
         @JavascriptInterface
@@ -311,214 +314,217 @@ class NativeWebViewEngine(
     private fun injectTurboBetAccelerationScript() {
         val jsScript = """
             (function() {
-                window.__turboBetActive = ${if (isTurboBetActive) "true" else "false"};
-                if (window.__turboBetEngineInjected) return;
-                window.__turboBetEngineInjected = true;
+                if (window.__betLoaderEngineInjected) return;
+                window.__betLoaderEngineInjected = true;
 
-                console.log("Turbo 2-Second Countdown & Bet Engine Active");
+                console.log("Native 2-Second Betting Modal Auto-Dismiss Engine Active");
 
-                // Speed up JavaScript timers for batting/countdown (5 seconds -> 2 seconds)
-                const originalSetInterval = window.setInterval;
-                const originalSetTimeout = window.setTimeout;
+                var trackedModals = new Map();
 
-                window.setInterval = function(fn, delay, ...args) {
-                    if (window.__turboBetActive && delay) {
-                        const numDelay = Number(delay);
-                        if (!isNaN(numDelay)) {
-                            if (numDelay >= 4000 && numDelay <= 6000) {
-                                delay = 400; // 5 x 400ms = 2000ms (2 seconds)
-                            } else if (numDelay >= 900 && numDelay <= 1200) {
-                                delay = 400; // 1-second interval scaled to 400ms
-                            }
+                var BET_KEYWORDS = [
+                    "your bet is being processed",
+                    "bet is being processed",
+                    "bet being processed",
+                    "processing bet",
+                    "processing your bet",
+                    "placing your bet",
+                    "placing bet",
+                    "bet being placed",
+                    "cashout in progress",
+                    "cashout is progress",
+                    "submitting bet",
+                    "bet submission",
+                    "order processing",
+                    "bet delay",
+                    "betting delay",
+                    "in-play delay"
+                ];
+
+                function isInteractiveInputForm(el) {
+                    if (!el || !el.querySelectorAll) return false;
+                    var inputs = el.querySelectorAll('input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="number"], select, textarea');
+                    for (var i = 0; i < inputs.length; i++) {
+                        var inp = inputs[i];
+                        var style = window.getComputedStyle(inp);
+                        if (style.display !== 'none' && style.visibility !== 'hidden') {
+                            return true;
                         }
                     }
-                    return originalSetInterval.call(this, fn, delay, ...args);
-                };
+                    return false;
+                }
 
-                window.setTimeout = function(fn, delay, ...args) {
-                    if (window.__turboBetActive && delay) {
-                        const numDelay = Number(delay);
-                        if (!isNaN(numDelay)) {
-                            if (numDelay >= 4000 && numDelay <= 6000) {
-                                delay = 2000; // 5-second timeout executed at 2 seconds
-                            } else if (numDelay > 2000 && numDelay <= 10000) {
-                                delay = 2000;
-                            }
+                function isBetProcessingText(text) {
+                    if (!text) return false;
+                    var lower = text.toLowerCase().trim();
+                    for (var i = 0; i < BET_KEYWORDS.length; i++) {
+                        if (lower.indexOf(BET_KEYWORDS[i]) !== -1) {
+                            return true;
                         }
                     }
-                    return originalSetTimeout.call(this, fn, delay, ...args);
-                };
+                    var hasProcessing = lower.indexOf("processing") !== -1 || lower.indexOf("being processed") !== -1 || lower.indexOf("please wait") !== -1;
+                    var hasBetTerm = lower.indexOf("bet") !== -1 || lower.indexOf("cashout") !== -1 || lower.indexOf("order") !== -1;
+                    if (hasProcessing && hasBetTerm) {
+                        return true;
+                    }
+                    return false;
+                }
 
-                let lastTriggerTime = 0;
+                function isVisible(el) {
+                    if (!el || !el.getBoundingClientRect) return false;
+                    var rect = el.getBoundingClientRect();
+                    if (rect.width === 0 && rect.height === 0) return false;
+                    var style = window.getComputedStyle(el);
+                    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+                }
 
-                const dismiss2SecCountdownDialogs = function() {
-                    if (!window.__turboBetActive) return;
+                function findModalContainer(el) {
+                    var curr = el;
+                    var modalContainer = el;
+                    while (curr && curr !== document.body && curr !== document.documentElement) {
+                        var cl = (curr.className && typeof curr.className === 'string') ? curr.className : '';
+                        var role = curr.getAttribute ? curr.getAttribute('role') : '';
+                        if (
+                            cl.indexOf('swal2-container') !== -1 ||
+                            cl.indexOf('swal-overlay') !== -1 ||
+                            cl.indexOf('sweet-alert') !== -1 ||
+                            cl.indexOf('modal') !== -1 ||
+                            cl.indexOf('popup') !== -1 ||
+                            cl.indexOf('dialog') !== -1 ||
+                            role === 'dialog' ||
+                            role === 'alertdialog'
+                        ) {
+                            modalContainer = curr;
+                        }
+                        curr = curr.parentElement;
+                    }
+                    return modalContainer;
+                }
 
-                    const now = Date.now();
+                function dismissModal(modalEl) {
+                    if (!modalEl) return;
 
-                    // 1. Target all potential modal, dialog, popup, and fixed overlay elements
-                    const candidateElements = new Set();
-                    const selectors = [
-                        '.sweet-alert', '.swal2-container', '.swal-overlay', '.swal2-modal',
+                    modalEl.style.setProperty('display', 'none', 'important');
+                    modalEl.style.setProperty('visibility', 'hidden', 'important');
+                    modalEl.style.setProperty('opacity', '0', 'important');
+                    modalEl.style.setProperty('pointer-events', 'none', 'important');
+
+                    var container = findModalContainer(modalEl);
+                    if (container && container !== document.body && container !== document.documentElement) {
+                        container.style.setProperty('display', 'none', 'important');
+                        container.style.setProperty('visibility', 'hidden', 'important');
+                        container.style.setProperty('opacity', '0', 'important');
+                        container.style.setProperty('pointer-events', 'none', 'important');
+                    }
+
+                    var backdrops = document.querySelectorAll('.modal-backdrop, .swal2-backdrop, .swal-overlay, [class*="modal-mask"], [class*="v-overlay"]');
+                    for (var b = 0; b < backdrops.length; b++) {
+                        var bd = backdrops[b];
+                        bd.style.setProperty('display', 'none', 'important');
+                        bd.style.setProperty('pointer-events', 'none', 'important');
+                    }
+
+                    if (document.body) {
+                        document.body.classList.remove('modal-open', 'swal2-shown', 'swal2-no-backdrop');
+                        document.body.style.overflow = '';
+                        document.body.style.pointerEvents = '';
+                    }
+                    if (document.documentElement) {
+                        document.documentElement.classList.remove('swal2-shown', 'swal2-height-auto');
+                        document.documentElement.style.overflow = '';
+                    }
+
+                    if (window.AndroidBridge && typeof window.AndroidBridge.onCountdownDialogDetected === 'function') {
+                        try {
+                            window.AndroidBridge.onCountdownDialogDetected("Betting processing dialog auto-dismissed");
+                        } catch(e) {}
+                    }
+                }
+
+                function scanAndTrackModals() {
+                    var now = Date.now();
+
+                    var selectors = [
+                        '.sweet-alert', '.swal2-container', '.swal2-modal', '.swal-overlay',
                         '.modal', '.modal-dialog', '.modal-content', '.popup', '.dialog',
-                        '.overlay', '.backdrop', '[role="dialog"]', '[aria-modal="true"]',
+                        '.overlay', '[role="dialog"]', '[role="alertdialog"]', '[aria-modal="true"]',
                         '[class*="processing"]', '[class*="countdown"]', '[class*="timer"]',
-                        '[class*="bet-dialog"]', '[class*="bet-slip"]', '[class*="delay"]',
-                        '[class*="order-dialog"]', '[class*="bet_dialog"]', '[class*="betWrap"]',
-                        '[class*="lay-dialog"]', '[class*="back-dialog"]', '[class*="v-dialog"]',
-                        '[class*="ant-modal"]', '[class*="MuiDialog"]'
+                        '[class*="bet-dialog"]', '[class*="bet_dialog"]', '[class*="betWrap"]',
+                        '[class*="bet-loader"]', '[class*="order-dialog"]', '[class*="lay-dialog"]',
+                        '[class*="back-dialog"]', '[class*="v-dialog"]', '[class*="ant-modal"]',
+                        '[class*="MuiDialog"]'
                     ];
 
-                    selectors.forEach(function(sel) {
+                    var candidates = [];
+                    for (var s = 0; s < selectors.length; s++) {
                         try {
-                            document.querySelectorAll(sel).forEach(function(el) {
-                                if (el) candidateElements.add(el);
-                            });
-                        } catch(e) {}
-                    });
-
-                    // 2. Also search all fixed / absolute elements across DOM
-                    try {
-                        document.querySelectorAll('div, section, article').forEach(function(el) {
-                            if (!el) return;
-                            const pos = el.style.position || (window.getComputedStyle(el).position);
-                            if (pos === 'fixed' || pos === 'absolute') {
-                                const txt = (el.innerText || '').toLowerCase();
-                                if (txt.includes('being processed') || txt.includes('please wait') || txt.includes('cashout in progress') || txt.includes('processing')) {
-                                    candidateElements.add(el);
-                                }
+                            var els = document.querySelectorAll(selectors[s]);
+                            for (var i = 0; i < els.length; i++) {
+                                candidates.push(els[i]);
                             }
-                        });
+                        } catch(e) {}
+                    }
+
+                    try {
+                        var fixedEls = document.querySelectorAll('div, section, article');
+                        for (var f = 0; f < fixedEls.length; f++) {
+                            var el = fixedEls[f];
+                            if (!el) continue;
+                            var pos = el.style.position || (window.getComputedStyle(el).position);
+                            if (pos === 'fixed' || pos === 'absolute') {
+                                candidates.push(el);
+                            }
+                        }
                     } catch(e) {}
 
-                    candidateElements.forEach(function(el) {
-                        if (!el) return;
+                    for (var c = 0; c < candidates.length; c++) {
+                        var candidate = candidates[c];
+                        if (!candidate || !isVisible(candidate)) continue;
+                        if (isInteractiveInputForm(candidate)) continue;
 
-                        const style = window.getComputedStyle(el);
-                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-                            return;
-                        }
+                        var txt = candidate.innerText || candidate.textContent || '';
+                        if (isBetProcessingText(txt)) {
+                            if (!trackedModals.has(candidate)) {
+                                trackedModals.set(candidate, {
+                                    firstSeen: now,
+                                    dismissed: false
+                                });
 
-                        // Do not touch login/registration/deposit forms with interactive user inputs
-                        const inputs = el.querySelectorAll('input[type="text"], input[type="password"], input[type="email"], input[type="tel"], textarea');
-                        if (inputs.length > 0) {
-                            return;
-                        }
-
-                        const text = (el.innerText || el.textContent || '').trim();
-                        const textLower = text.toLowerCase();
-
-                        // Exact & broad matches for betting & cashout countdown dialogs
-                        const hasCountdownNumber = /\b[1-5]\b/.test(text) || /\b[1-5]s\b/i.test(text) || /\b0:0[1-5]\b/.test(text) || /\b5\s*sec/i.test(text);
-                        const isVideoBetDialog = 
-                            textLower.includes("your bet is being processed") ||
-                            textLower.includes("cashout in progress") ||
-                            textLower.includes("cashout is progress") ||
-                            textLower.includes("placing your bet") ||
-                            textLower.includes("placing bet") ||
-                            textLower.includes("bet being placed") ||
-                            textLower.includes("processing bet") ||
-                            textLower.includes("order processing") ||
-                            textLower.includes("submitting bet") ||
-                            textLower.includes("bet delay") ||
-                            textLower.includes("betting delay") ||
-                            textLower.includes("in-play delay") ||
-                            (textLower.includes("being processed") && textLower.includes("wait")) ||
-                            (textLower.includes("please wait") && (textLower.includes("bet") || textLower.includes("cashout") || textLower.includes("order") || hasCountdownNumber)) ||
-                            (textLower.includes("processing") && (textLower.includes("bet") || textLower.includes("cashout") || textLower.includes("order") || hasCountdownNumber));
-
-                        if (!isVideoBetDialog) {
-                            return;
-                        }
-
-                        // Track first time this batting dialog was seen
-                        if (!el.__betDialogFirstSeen) {
-                            el.__betDialogFirstSeen = now;
-                        }
-
-                        const elapsed = now - el.__betDialogFirstSeen;
-                        const remainingMs = Math.max(0, 2000 - elapsed);
-                        const remainingSec = Math.ceil(remainingMs / 1000);
-
-                        // During the first 2 seconds, show the accelerated 2-second countdown
-                        if (elapsed < 2000) {
-                            el.querySelectorAll('span, div, p, h1, h2, h3, h4, b, strong').forEach(function(c) {
-                                const val = (c.innerText || '').trim();
-                                if (/^[1-5]$/.test(val) || /^[1-5]s$/i.test(val)) {
-                                    c.innerText = remainingSec > 0 ? (val.endsWith('s') ? remainingSec + 's' : '' + remainingSec) : '0';
-                                }
-                            });
-                            return; // Keep dialog visible during the 2 seconds
-                        }
-
-                        // Set countdown digits to 0
-                        el.querySelectorAll('span, div, p, h1, h2, h3, h4, b, strong').forEach(function(c) {
-                            const val = (c.innerText || '').trim();
-                            if (/^[0-5]$/.test(val) || /^[0-5]s$/i.test(val)) {
-                                c.innerText = '0';
-                            }
-                        });
-
-                        // Instantly click any confirm/close button if present
-                        const closeBtns = el.querySelectorAll('.close, .btn-close, .swal2-confirm, .swal-button, [class*="close"], [class*="dismiss"], [class*="cancel"], [class*="ok"], [class*="done"], [class*="accept"], [class*="confirm"], button');
-                        closeBtns.forEach(function(btn) {
-                            try { btn.click(); } catch(e){}
-                            try {
-                                var ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-                                btn.dispatchEvent(ev);
-                            } catch(e){}
-                        });
-
-                        // After 2 seconds, immediately hide dialog & disable pointer events
-                        el.style.setProperty('display', 'none', 'important');
-                        el.style.setProperty('visibility', 'hidden', 'important');
-                        el.style.setProperty('opacity', '0', 'important');
-                        el.style.setProperty('pointer-events', 'none', 'important');
-
-                        // Find and hide closest modal wrapper or overlay backdrop
-                        let parent = el.parentElement;
-                        while (parent && parent !== document.body) {
-                            const pStyle = window.getComputedStyle(parent);
-                            if (pStyle.position === 'fixed' || pStyle.position === 'absolute') {
-                                parent.style.setProperty('display', 'none', 'important');
-                                parent.style.setProperty('visibility', 'hidden', 'important');
-                                parent.style.setProperty('pointer-events', 'none', 'important');
-                            }
-                            parent = parent.parentElement;
-                        }
-
-                        document.querySelectorAll('.modal-backdrop, .swal2-backdrop, .swal-overlay, [class*="backdrop"], [class*="overlay"]').forEach(function(bd) {
-                            try {
-                                bd.style.setProperty('display', 'none', 'important');
-                                bd.style.setProperty('pointer-events', 'none', 'important');
-                            } catch(e){}
-                        });
-
-                        // Trigger native reload via AndroidBridge after 2 seconds
-                        if (now - lastTriggerTime > 2000 && !el.__turboReloadTriggered) {
-                            el.__turboReloadTriggered = true;
-                            lastTriggerTime = now;
-
-                            if (window.AndroidBridge && typeof window.AndroidBridge.onCountdownDialogDetected === 'function') {
-                                try {
-                                    window.AndroidBridge.onCountdownDialogDetected(window.location.href, text);
-                                } catch(e) {}
+                                (function(targetEl) {
+                                    setTimeout(function() {
+                                        var record = trackedModals.get(targetEl);
+                                        if (record && !record.dismissed) {
+                                            record.dismissed = true;
+                                            dismissModal(targetEl);
+                                        }
+                                    }, 2000);
+                                })(candidate);
                             } else {
-                                setTimeout(function() {
-                                    try {
-                                        window.location.reload();
-                                    } catch(e) {}
-                                }, 200);
+                                var record = trackedModals.get(candidate);
+                                if (record && !record.dismissed) {
+                                    var elapsed = now - record.firstSeen;
+                                    if (elapsed >= 2000) {
+                                        record.dismissed = true;
+                                        dismissModal(candidate);
+                                    }
+                                }
                             }
                         }
-                    });
-                };
+                    }
+                }
 
-                setInterval(dismiss2SecCountdownDialogs, 100);
+                setInterval(scanAndTrackModals, 50);
 
                 try {
-                    const observer = new MutationObserver(dismiss2SecCountdownDialogs);
-                    observer.observe(document.body || document.documentElement, { childList: true, subtree: true, characterData: true });
+                    var observer = new MutationObserver(function() {
+                        scanAndTrackModals();
+                    });
+                    observer.observe(document.body || document.documentElement, {
+                        childList: true,
+                        subtree: true,
+                        characterData: true,
+                        attributes: true,
+                        attributeFilter: ['style', 'class', 'hidden']
+                    });
                 } catch(e) {}
             })();
         """.trimIndent()

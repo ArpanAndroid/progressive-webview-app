@@ -8,9 +8,8 @@ import android.os.Looper
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.example.progressive_webview_app.databinding.ActivitySplashBinding
+
 
 @SuppressLint("CustomSplashScreen")
 class SplashActivity : AppCompatActivity() {

@@ -266,7 +266,7 @@ class MainActivity : AppCompatActivity(), NativeWebViewEngine.WebViewEventListen
     }
 
     override fun onPopupAutoClosed(message: String) {
-        // Betting 2-second dialog auto-closed & reloaded
+        // Betting processing/countdown dialog auto-dismissed after 2 seconds without reload
     }
 
     override fun onFileChooserRequested(
