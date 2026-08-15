@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:progressive_webview_app/main.dart';
+import 'package:cricket_batting/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

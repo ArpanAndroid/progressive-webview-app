@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cricket Batting</string>
+    <string name="splash_title">CRICKET BATTING</string>
+    <string name="splash_subtitle">PREMIUM LIVE SPORTS &amp; CASINO</string>
+    <string name="splash_secure">72H SECURE SESSION</string>
+    <string name="session_active">72h Secure Session Active</string>
+    <string name="change_url">Change Target URL</string>
+    <string name="enter_url_hint">https://example.com</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="reset_default">Reset Default</string>
+    <string name="retry">Retry</string>
+    <string name="error_loading_title">Unable to Connect</string>
+    <string name="error_loading_desc">Please check your internet connection and tap retry.</string>
+</resources>
